@@ -1,6 +1,6 @@
 'use client';
 
-import { useStore } from '../../lib/store';
+import { useStore } from '../lib/store';
 import { useEffect, useMemo } from 'react';
 import { format } from 'date-fns';
 import { bn } from 'date-fns/locale/bn';
