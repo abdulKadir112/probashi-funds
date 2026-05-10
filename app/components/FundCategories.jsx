@@ -25,16 +25,16 @@ export default function FundCategories() {
       alt: 'ইফতার তহবিল'
     },
     {
-      title: 'মাহফিল অনুদান',
-      slug: 'mahfil-onudan',
-      image: '/funds logo/mahafil.png',
-      alt: 'মাহফিল অনুদান'
-    },
-    {
       title: 'মসজিদ উন্নয়ন',
       slug: 'mosjid-unnoyon',
       image: '/funds logo/mosjid.png',
       alt: 'মসজিদ উন্নয়ন'
+    },
+    {
+      title: 'মাহফিল অনুদান',
+      slug: 'mahfil-onudan',
+      image: '/funds logo/mahafil.png',
+      alt: 'মাহফিল অনুদান'
     },
     {
       title: 'মাদ্রাসা ফান্ড',
