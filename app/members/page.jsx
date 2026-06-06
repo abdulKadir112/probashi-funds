@@ -4,7 +4,7 @@ import { useStore } from '../lib/store';
 import { format } from 'date-fns';
 import { bn } from 'date-fns/locale/bn';
 import Link from 'next/link';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react'; // ✅ Suspense যুক্ত করা হয়েছে
 import { ArrowLeft, Heart, Award, Star } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import IslamicLoader from '../components/IslamicLoader';
@@ -31,7 +31,7 @@ const fundNameMap = {
   'general': 'সাধারণ তহবিল',
 };
 
-// ProfileCard Component - সংশোধিত
+// ProfileCard Component
 function ProfileCard({ member, onClick }) {
   const initial = member.name.trim()?.[0]?.toUpperCase() || '?';
 
@@ -57,7 +57,6 @@ function ProfileCard({ member, onClick }) {
           </p>
         </div>
 
-        {/* এরর ঠিক করা হয়েছে: donor এর বদলে member.displayFund ব্যবহার */}
         <div className="mt-2 text-[10px] md:text-xs text-emerald-600 font-medium">
           {member.displayFund ? (fundNameMap[member.displayFund] || member.displayFund) : 'সাধারণ সাহায্য'}
         </div>
@@ -76,7 +75,8 @@ const normalizeName = (name) => {
   return name.trim().replace(/\s+/g, ' ').toLowerCase();
 };
 
-export default function MembersPage() {
+// আসল মেম্বার পেজের কন্টেন্ট এখানে নিয়ে আসা হয়েছে যেন Suspense কাজ করতে পারে
+function MembersContent() {
   const { transactions, fetchData, isLoading } = useStore();
   const [selectedMember, setSelectedMember] = useState(null);
   const searchParams = useSearchParams();
@@ -112,7 +112,7 @@ export default function MembersPage() {
             totalDonated: amount,
             phone: t.phone || '',
             address: t.address || '',
-            displayFund: t.fundId // প্রথম পাওয়া ফান্ডটি স্টোর করা হচ্ছে
+            displayFund: t.fundId 
           });
         }
       }
@@ -215,5 +215,14 @@ export default function MembersPage() {
         </div>
       )}
     </div>
+  );
+}
+
+// ✅ মেইন এক্সপোর্ট-কে Suspense দিয়ে মুড়িয়ে দেওয়া হলো
+export default function MembersPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50"><IslamicLoader /></div>}>
+      <MembersContent />
+    </Suspense>
   );
 }
