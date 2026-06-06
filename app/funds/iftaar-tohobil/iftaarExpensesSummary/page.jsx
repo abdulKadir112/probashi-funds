@@ -130,10 +130,11 @@ export default function IftaarExpensesSummary() {
       {/* 📄 মেইন রিপোর্ট কন্টেইনার */}
       <div className="space-y-6 print:space-y-4">
         
-        {/* প্রফেশনাল প্রিন্ট হেডার (শুধু প্রিন্ট কপিতে আসবে) */}
-        <div className="hidden print:block text-center border-b pb-3 border-gray-300">
-          <h1 className="text-2xl font-bold text-gray-999 tracking-wide">ইফতার তহবিল আর্থিক বিবরণী</h1>
-          <div className="flex justify-center gap-6 text-xs text-gray-600 font-medium mt-1">
+        {/* 🏢 প্রফেশনাল প্রিন্ট হেডার (শুধু প্রিন্ট কপিতে সবার উপরে আসবে) */}
+        <div className="hidden print:block text-center border-b-2 pb-4 border-gray-300">
+          <h1 className="text-3xl font-black text-gray-950 tracking-wider mb-1">প্রবাসী মুক্ত ফান্ড </h1>
+          <p className="text-base font-bold text-gray-700 mb-2">ইফতার তহবিল আর্থিক বিবরণী</p>
+          <div className="flex justify-center gap-6 text-xs text-gray-600 font-medium">
             <p><strong>অর্থবছর:</strong> {Number(selectedYear).toLocaleString('bn-BD')} ইংরেজি</p>
             <p><strong>রিপোর্ট তৈরির তারিখ:</strong> {format(new Date(), 'dd MMMM yyyy', { locale: bn })}</p>
           </div>
@@ -258,7 +259,7 @@ export default function IftaarExpensesSummary() {
                 <tfoot>
                   <tr className="bg-red-50/50 font-black text-gray-800 border-t-2 border-orange-200 print:bg-gray-100 print:border-gray-400">
                     <td colSpan={2} className="p-4 text-left print:p-2 font-black">
-                      সর্বমোট খরচ:
+                      सर्वমোট খরচ:
                     </td>
                     <td className="p-4 text-center print:p-2 font-black">
                       {grandTotalCount.toLocaleString('bn-BD')} টি

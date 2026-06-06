@@ -35,10 +35,10 @@ export default function RootLayout({
   return (
     <html lang="bn">
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
-        <AuthProvider>
+        {/* <AuthProvider> */}
           {children}
-          <InstallPWA /> {/* ✅ safe */}
-        </AuthProvider>
+          {/* <InstallPWA />  */}
+        {/* </AuthProvider> */}
       </body>
     </html>
   );
