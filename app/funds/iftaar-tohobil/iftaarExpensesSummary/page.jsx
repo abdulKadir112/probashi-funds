@@ -132,7 +132,7 @@ export default function IftaarExpensesSummary() {
         
         {/* 🏢 প্রফেশনাল প্রিন্ট হেডার (শুধু প্রিন্ট কপিতে সবার উপরে আসবে) */}
         <div className="hidden print:block text-center border-b-2 pb-4 border-gray-300">
-          <h1 className="text-3xl font-black text-gray-950 tracking-wider mb-1">প্রবাসী মুক্ত ফান্ড </h1>
+          <h1 className="text-3xl font-black text-gray-950 tracking-wider mb-1">প্রবাসী মুক্ত ফান্ড</h1>
           <p className="text-base font-bold text-gray-700 mb-2">ইফতার তহবিল আর্থিক বিবরণী</p>
           <div className="flex justify-center gap-6 text-xs text-gray-600 font-medium">
             <p><strong>অর্থবছর:</strong> {Number(selectedYear).toLocaleString('bn-BD')} ইংরেজি</p>
