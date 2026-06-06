@@ -54,7 +54,7 @@ export default function IftaarFundHome() {
     { name: 'হোম', link: '/', icon: <MdHome /> },
     { name: 'দানকারী', link: `/funds/${currentFund}/iftaar-donor`, icon: <FaDonate /> },
     { name: 'গ্রহীতা', link: `/funds/${currentFund}/iftaar-receiver`, icon: <BiSolidDonateHeart /> },
-    { name: 'খরচ', link: `/funds/${currentFund}/iftaar-expenses`, icon: <FaBook /> },
+    { name: 'খরচ', link: `/funds/${currentFund}/iftaarExpensesSummary`, icon: <FaBook /> },
     { name: 'সদস্য', link: `/funds/${currentFund}/iftaar-members`, icon: <FaPeopleGroup /> },
     { name: 'ড্যাশবোর্ড', link: `/funds/${currentFund}/iftaar-dashboard`, icon: <MdAccountCircle /> },
   ];
@@ -62,13 +62,18 @@ export default function IftaarFundHome() {
   return (
     <div className="min-h-screen bg-[#FFFBF0] pb-24">
       {/* Back Button */}
-      <div className="max-w-7xl mx-auto p-4 flex items-center gap-4">
+      <div className='flex justify-between'>
+      <div className="p-4 flex items-center gap-4">
         <Link href="/">
           <button className="p-2 bg-white border border-orange-100 rounded-xl text-orange-600 hover:bg-orange-50 transition shadow-sm">
             <FaArrowLeft size={20} />
           </button>
         </Link>
         <span className="font-bold text-orange-900">তহবিল তালিকা</span>
+      </div>
+       <div className="p-4 flex items-center gap-4">
+        
+       </div>
       </div>
 
       {/* Hero Section */}
