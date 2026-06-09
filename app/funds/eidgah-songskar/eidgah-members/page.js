@@ -5,30 +5,31 @@ import Link from 'next/link';
 import { useState, useMemo, useEffect, Suspense } from 'react';
 import { ArrowLeft, Search, Users, Phone, MapPin, Award } from 'lucide-react';
 
-function IftaarMembersContent() {
-  // members এর বদলে সরাসরি transactions ব্যবহার করছি নির্ভুল ডাটার জন্য
+function EidgahMembersContent() {
+  // members এর বদলে সরাসরি transactions ব্যবহার করা হচ্ছে নির্ভুল ডাটার জন্য
   const { transactions, isLoading, fetchData } = useStore();
   
-  const FUND_ID = 'iftaar-tohobil';
+  // ফান্ডের আইডি পরিবর্তন করে ঈদগাহ সংস্কার ফান্ডের আইডি দেওয়া হলো
+  const FUND_ID = 'eidgah-songskar';
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     fetchData(FUND_ID);
   }, [fetchData]);
 
-  // ট্রানজেকশন থেকে শুধুমাত্র ইফতার তহবিলের মেম্বারদের বের করা
+  // ট্রানজেকশন থেকে শুধুমাত্র ঈদগাহ সংস্কার তহবিলের মেম্বারদের বের করা
   const filteredMembers = useMemo(() => {
     if (!transactions || !Array.isArray(transactions)) return [];
 
     // ১. শুধুমাত্র এই ফান্ডের 'donation' টাইপ ট্রানজেকশন ফিল্টার
-    const iftaarDonations = transactions.filter(t => 
+    const eidgahDonations = transactions.filter(t => 
       (t.fundId === FUND_ID || !t.fundId) && t.type === 'donation'
     );
 
     // ২. একই নামের দাতা বারবার থাকলে তাদের তথ্য একত্রিত করা (Unique Members)
     const memberMap = {};
 
-    iftaarDonations.forEach(t => {
+    eidgahDonations.forEach(t => {
       const name = t.donorName?.trim() || 'অজ্ঞাত দাতা';
       if (!memberMap[name]) {
         memberMap[name] = {
@@ -60,7 +61,7 @@ function IftaarMembersContent() {
   const getInitialAvatar = (name = '') => {
     const initial = name.trim()?.[0]?.toUpperCase() || '?';
     return (
-      <div className="w-16 h-16 rounded-2xl bg-orange-100 flex items-center justify-center text-orange-600 font-black text-2xl shadow-inner group-hover:bg-orange-600 group-hover:text-white transition-all duration-300">
+      <div className="w-16 h-16 rounded-2xl bg-emerald-100 flex items-center justify-center text-emerald-600 font-black text-2xl shadow-inner group-hover:bg-emerald-600 group-hover:text-white transition-all duration-300">
         {initial}
       </div>
     );
@@ -68,33 +69,33 @@ function IftaarMembersContent() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-orange-50">
+      <div className="min-h-screen flex items-center justify-center bg-emerald-50">
         <div className="text-center">
-          <div className="w-14 h-14 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-orange-700 font-bold">সদস্য তালিকা লোড হচ্ছে...</p>
+          <div className="w-14 h-14 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-emerald-700 font-bold">সদস্য তালিকা লোড হচ্ছে...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#FFFAF5] pb-24">
+    <div className="min-h-screen bg-[#F9FBF9] pb-24">
       {/* Search Header */}
-      <div className="bg-white border-b border-orange-100 sticky top-0 z-30 p-4 shadow-sm">
+      <div className="bg-white border-b border-emerald-100 sticky top-0 z-30 p-4 shadow-sm">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <Link href={`/funds/${FUND_ID}`}>
-            <button className="p-3 bg-orange-50 text-orange-600 rounded-2xl hover:bg-orange-100 transition">
+            <button className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl hover:bg-emerald-100 transition">
               <ArrowLeft size={24} />
             </button>
           </Link>
           <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-orange-300" size={18} />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-300" size={18} />
             <input
               type="text"
               placeholder="সদস্যের নাম বা ঠিকানা..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 bg-orange-50/30 border border-orange-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-400 text-gray-800"
+              className="w-full pl-12 pr-4 py-3 bg-emerald-50/30 border border-emerald-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-400 text-gray-800"
             />
           </div>
         </div>
@@ -102,12 +103,12 @@ function IftaarMembersContent() {
 
       <div className="max-w-6xl mx-auto p-6 md:p-10">
         <div className="text-center mb-12">
-          <div className="inline-block p-4 bg-orange-100 rounded-full mb-4 text-orange-600 shadow-sm">
+          <div className="inline-block p-4 bg-emerald-100 rounded-full mb-4 text-emerald-600 shadow-sm">
             <Users size={40} />
           </div>
-          <h1 className="text-3xl md:text-5xl font-black text-gray-900 mb-2">ইফতার তহবিল সদস্যবৃন্দ</h1>
-          <p className="text-orange-600 font-bold uppercase tracking-widest text-sm">
-             সক্রিয় দাতা: {filteredMembers.length} জন
+          <h1 className="text-3xl md:text-5xl font-black text-gray-900 mb-2">ঈদগাহ সংস্কার তহবিল সদস্যবৃন্দ</h1>
+          <p className="text-emerald-600 font-bold uppercase tracking-widest text-sm">
+            সক্রিয় দাতা: {filteredMembers.length} জন
           </p>
         </div>
 
@@ -115,11 +116,11 @@ function IftaarMembersContent() {
           {filteredMembers.map((member, idx) => (
             <div 
               key={idx}
-              className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-orange-50 hover:shadow-xl transition-all duration-300 group relative overflow-hidden"
+              className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-emerald-50 hover:shadow-xl transition-all duration-300 group relative overflow-hidden"
             >
               {/* Top 3 Badge */}
               {idx < 3 && (
-                <div className="absolute top-4 right-4 bg-yellow-400 text-white p-1.5 rounded-lg shadow-sm">
+                <div className="absolute top-4 right-4 bg-amber-400 text-white p-1.5 rounded-lg shadow-sm">
                   <Award size={16} />
                 </div>
               )}
@@ -128,26 +129,26 @@ function IftaarMembersContent() {
                 {getInitialAvatar(member.name)}
                 <div>
                   <h3 className="text-xl font-bold text-gray-800 leading-tight">{member.name}</h3>
-                  <p className="text-orange-500 font-bold text-[10px] uppercase tracking-widest">
+                  <p className="text-emerald-500 font-bold text-[10px] uppercase tracking-widest">
                     দাতা #{idx + 1}
                   </p>
                 </div>
               </div>
 
-              <div className="space-y-3 pt-4 border-t border-orange-50">
+              <div className="space-y-3 pt-4 border-t border-emerald-50">
                 <div className="flex items-center gap-3 text-gray-600">
-                  <Phone size={16} className="text-orange-400" />
+                  <Phone size={16} className="text-emerald-400" />
                   <span className="text-sm font-medium">{member.phone || 'মোবাইল নেই'}</span>
                 </div>
                 <div className="flex items-center gap-3 text-gray-600">
-                  <MapPin size={16} className="text-orange-400" />
+                  <MapPin size={16} className="text-emerald-400" />
                   <span className="text-sm font-medium truncate">{member.address || 'ঠিকানা নেই'}</span>
                 </div>
               </div>
 
-              <div className="mt-6 pt-4 bg-orange-50/50 rounded-2xl flex justify-between items-center px-4 py-3 border border-orange-100">
-                <span className="text-[10px] font-black text-orange-400 uppercase">মোট দান</span>
-                <span className="font-black text-orange-600 text-lg">
+              <div className="mt-6 pt-4 bg-emerald-50/50 rounded-2xl flex justify-between items-center px-4 py-3 border border-emerald-100">
+                <span className="text-[10px] font-black text-emerald-400 uppercase">মোট দান</span>
+                <span className="font-black text-emerald-600 text-lg">
                   ৳ {Number(member.totalDonated).toLocaleString('bn-BD')}
                 </span>
               </div>
@@ -156,8 +157,8 @@ function IftaarMembersContent() {
         </div>
 
         {filteredMembers.length === 0 && !isLoading && (
-          <div className="text-center py-20 bg-white rounded-[3rem] border-2 border-dashed border-orange-100">
-            <Users className="mx-auto text-orange-100 mb-4" size={60} />
+          <div className="text-center py-20 bg-white rounded-[3rem] border-2 border-dashed border-emerald-100">
+            <Users className="mx-auto text-emerald-100 mb-4" size={60} />
             <p className="text-gray-400 text-lg font-medium">এই তহবিলে এখনও কোনো সদস্য নেই</p>
           </div>
         )}
@@ -166,10 +167,10 @@ function IftaarMembersContent() {
   );
 }
 
-export default function IftaarMembersPage() {
+export default function EidgahMembersPage() {
   return (
-    <Suspense fallback={<div className="p-10 text-center text-orange-600 font-bold min-h-screen flex items-center justify-center">লোড হচ্ছে...</div>}>
-      <IftaarMembersContent />
+    <Suspense fallback={<div className="p-10 text-center text-emerald-600 font-bold min-h-screen flex items-center justify-center">লোড হচ্ছে...</div>}>
+      <EidgahMembersContent />
     </Suspense>
   );
 }

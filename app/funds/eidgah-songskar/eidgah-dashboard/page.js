@@ -18,8 +18,8 @@ export default function EidgahDashboard() {
     isLoading 
   } = useStore();
   
-  const FUND_ID = 'eidgah-tohobil'; // ঈদগাহ ফান্ডের আইডি
-  const OTHER_FUNDS = ['asahay-sahajjo', 'general-fund', 'eidgah-tohobil']; 
+  const FUND_ID = 'eidgah-songskar'; // ঈদগাহ ফান্ডের আইডি
+  const OTHER_FUNDS = ['asahay-sahajjo', 'general-fund', 'eidgah-songskar']; 
   const ADMIN_PASSKEY = "admin1234";
 
   const [isAuthorized, setIsAuthorized] = useState(false);

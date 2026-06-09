@@ -8,7 +8,7 @@ import { FaArrowDown, FaCalendarAlt, FaLayerGroup, FaTable, FaWallet, FaDownload
 
 export default function EidgahExpensesSummary() {
   const { transactions } = useStore();
-  const currentFund = 'eidgah-tohobil'; // ঈদগাহ ফান্ডের আইডি
+  const currentFund = 'eidgah-songskar'; // ঈদগাহ ফান্ডের আইডি
   
   // 📅 বছর ফিল্টার করার জন্য স্টেট (ডিফল্ট ২০২৬ সেট করা হয়েছে)
   const [selectedYear, setSelectedYear] = useState('2026');

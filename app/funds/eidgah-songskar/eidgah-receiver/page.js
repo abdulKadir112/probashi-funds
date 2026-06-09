@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { ArrowLeft, Heart, Stars, Moon, Compass, Users, MapPin, Sparkles } from 'lucide-react';
 
 export default function EidgahInfoPage() {
-  const FUND_ID = 'eidgah-tohobil';
+  const FUND_ID = 'eidgah-songskar';
 
   return (
     <div className="min-h-screen bg-[#F4FAF7] text-gray-800 pb-20 selection:bg-emerald-200 selection:text-emerald-900">
