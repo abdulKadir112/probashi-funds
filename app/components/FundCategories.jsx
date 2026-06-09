@@ -31,6 +31,12 @@ export default function FundCategories() {
       alt: 'মসজিদ উন্নয়ন'
     },
     {
+      title: 'ঈদগাহ সংস্কার',
+      slug: 'eidgah-songskar',
+      image: '/funds logo/eidgaho.png',
+      alt: 'ঈদগাহ সংস্কার'
+    },
+    {
       title: 'মাহফিল অনুদান',
       slug: 'mahfil-onudan',
       image: '/funds logo/mahafil.png',
@@ -41,12 +47,6 @@ export default function FundCategories() {
       slug: 'madrasa-fund',
       image: '/funds logo/madrasha.png',
       alt: 'মাদ্রাসা ফান্ড'
-    },
-    {
-      title: 'ঈদগাহ সংস্কার',
-      slug: 'eidgah-songskar',
-      image: '/funds logo/eidgaho.png',
-      alt: 'ঈদগাহ সংস্কার'
     },
     {
       title: 'সাধারণ অনুদান',
