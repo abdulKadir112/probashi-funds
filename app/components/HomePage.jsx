@@ -4,12 +4,13 @@ import { useStore } from '../lib/store';
 import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import bn from 'date-fns/locale/bn';
-import { Heart, ArrowUp, Gift, Users, Moon, Star, Sparkles } from 'lucide-react';
-import { RiArrowRightLongLine } from 'react-icons/ri';
-import { motion, animate, AnimatePresence } from 'framer-motion'; 
+import { Heart, ArrowUp, Gift, Users, Moon, Star } from 'lucide-react';
+import { motion, animate } from 'framer-motion'; 
 import FundCategories from './FundCategories';
 import TopDonors from './TopDonorsSection';
 import Navbar from './Navbar';
+import Image from 'next/image';
+import IslamicLoader from '../loading'; // আপনার তৈরি করা কাস্টম লোডার
 
 function AnimatedNumber({ value }) {
   const [displayValue, setDisplayValue] = useState(0);
@@ -37,10 +38,27 @@ export default function Home() {
     isLoading
   } = useStore();
 
+  // প্রথমবার পেজ লোড ট্র্যাকিং করার জন্য স্টেট
+  const [isPageInitialLoading, setIsPageInitialLoading] = useState(true);
+
   useEffect(() => {
-    fetchAllData();
+    // ডাটা ফেচ করা হচ্ছে
+    fetchAllData().finally(() => {
+      // এপিআই কল প্রথমবার সফল বা ব্যর্থ যাই হোক, ইনিশিয়াল লোডিং বন্ধ হয়ে যাবে
+      setIsPageInitialLoading(false);
+    });
   }, [fetchAllData]);
 
+  // --- ১. ফুল পেজ হার্ড রিলোড লোডিং স্ক্রিন (আপনার কাস্টম ইসলামিক লোডারটি এখানে বসানো হলো) ---
+  if (isPageInitialLoading) {
+    return (
+      <div className="min-h-screen bg-[#F9FBFA] flex items-center justify-center p-4">
+        <IslamicLoader />
+      </div>
+    );
+  }
+
+  // --- ২. পেজ লোড হয়ে যাওয়ার পর নরমাল রেন্ডারিং লজিক ---
   const safeTransactions = Array.isArray(transactions) ? transactions : [];
 
   const recent = safeTransactions
@@ -102,15 +120,18 @@ export default function Home() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
+            className="flex flex-col items-center"
           >
-            <h1 className="text-2xl sm:text-4xl md:text-6xl font-black mb-1 tracking-tight drop-shadow-lg">
-              <span className="text-amber-400 mr-2 text-xl sm:text-3xl">☾</span>
-              প্রবাসী মুক্ত ফান্ড
-              <span className="text-amber-400 ml-2 text-xl sm:text-3xl">☽</span>
-            </h1>
-            <p className="text-[10px] sm:text-sm font-bold uppercase tracking-[0.2em] text-emerald-100 opacity-80 mb-6 sm:mb-8">
-              খিদমতে ইনসানিয়াহ • ২০২৬
-            </p>
+            {/* --- লোগো সেকশন --- */}
+            <div className="relative w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 mb-2 drop-shadow-[0_4px_20px_rgba(245,158,11,0.2)]">
+              <Image 
+                src="/logo/appLogo2.png" 
+                alt="প্রবাসী মুক্ত ফান্ড লোগো"
+                fill
+                priority
+                className="object-contain"
+              />
+            </div>
           </motion.div>
 
           {/* Compact Balance Card */}
@@ -176,7 +197,7 @@ export default function Home() {
                 <p className="text-emerald-300 font-bold tracking-widest">লেনদেন পাওয়া যায়নি</p>
             </div>
           ) : (
-            recent.map((t, idx) => {
+            recent.map((t) => {
               const isDonation = t.type === 'donation';
               const { main, sub } = getDisplayName(t);
               return (

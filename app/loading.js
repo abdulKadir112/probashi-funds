@@ -5,7 +5,7 @@ import Image from 'next/image'; // Next.js Image Component ইমপোর্ট
 
 const IslamicLoader = () => {
   return (
-    <div className="h-screen bg-[#17095350] flex flex-col items-center justify-center p-10 relative overflow-hidden">
+    <div className="flex flex-col items-center justify-center min-h-[400px] w-full p-10 relative overflow-hidden">
       
       {/* ১. প্রধান এনিমেটেড জ্যামিতিক অংশ */}
       <div className="relative w-32 h-32 flex items-center justify-center mb-8">
