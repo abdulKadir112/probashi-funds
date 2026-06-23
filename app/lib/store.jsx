@@ -17,6 +17,7 @@ export const useStore = create(
   persist(
     (set, get) => ({
       transactions: [],
+      pendingRequests: [], // ✅ ইউজারদের পেন্ডিং আবেদনের জন্য নতুন স্টেট
       members: [],
       totalDonation: 0,
       totalExpense: 0,
@@ -85,7 +86,7 @@ export const useStore = create(
           const expense = list.filter(t => t.type === 'expense').reduce((s, t) => s + (Number(t.amount) || 0), 0);
 
           set({
-            transactions: [...list], // এখানে reverse() না করে API এর সর্টিং ব্যবহার করা ভালো
+            transactions: [...list],
             totalDonation: donation,
             totalExpense: expense,
             netBalance: donation - expense,
@@ -142,10 +143,67 @@ export const useStore = create(
           }
         } catch (err) { console.error(err); }
         return false;
+      },
+
+      // ==========================================
+      // 🆕 নতুন যুক্ত হওয়া মেথডসমূহ (ইউজার রিকোয়েস্ট ম্যানেজমেন্ট)
+      // ==========================================
+
+      // ✅ ৬. ইউজারদের পাঠানো পেন্ডিং আবেদনগুলো লোড করা
+      fetchPendingRequests: async (fundId) => {
+        const fundName = cleanFundName(fundId);
+        if (!fundName) return;
+        try {
+          const res = await fetch(`${getBaseUrl()}/api/${fundName}/pending`);
+          if (res.ok) {
+            const data = await res.json();
+            set({ pendingRequests: Array.isArray(data) ? data : [] });
+          }
+        } catch (err) {
+          console.error("Fetch Pending Error:", err);
+          set({ pendingRequests: [] });
+        }
+      },
+
+      // ✅ ৭. আবেদন অনুমোদন (Approve / Accept) করা
+      approveRequest: async (id, fundId) => {
+        const fundName = cleanFundName(fundId);
+        try {
+          const res = await fetch(`${getBaseUrl()}/api/${fundName}/pending/${id}/approve`, {
+            method: 'POST',
+          });
+          if (res.ok) {
+            // অনুমোদন সম্পন্ন হলে মূল ট্রানজেকশন ডাটা এবং পেন্ডিং ডাটা দুটিই আপডেট হবে
+            await get().fetchData(fundName);
+            await get().fetchPendingRequests(fundName);
+            return true;
+          }
+        } catch (err) {
+          console.error("Approve Request Error:", err);
+        }
+        return false;
+      },
+
+      // ✅ ৮. আবেদন বাতিল (Reject) করা
+      rejectRequest: async (id, fundId) => {
+        const fundName = cleanFundName(fundId);
+        try {
+          const res = await fetch(`${getBaseUrl()}/api/${fundName}/pending/${id}`, {
+            method: 'DELETE',
+          });
+          if (res.ok) {
+            // বাতিল করা হলে শুধুমাত্র পেন্ডিং আবেদন তালিকাটি রিফ্রেশ হবে
+            await get().fetchPendingRequests(fundName);
+            return true;
+          }
+        } catch (err) {
+          console.error("Reject Request Error:", err);
+        }
+        return false;
       }
     }),
     // {
-    //   name: 'probashi-fund-storage-v1', // নাম পরিবর্তন করা হয়েছে ক্ল্যাশ এড়াতে
+    //   name: 'probashi-fund-storage-v1',
     //   storage: createJSONStorage(() => localStorage)
     // }
   )

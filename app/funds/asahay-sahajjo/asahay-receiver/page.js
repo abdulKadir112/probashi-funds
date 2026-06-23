@@ -5,14 +5,17 @@ import { format } from 'date-fns';
 import { bn } from 'date-fns/locale/bn';
 import Link from 'next/link';
 import { useState, useMemo, useEffect, Suspense } from 'react';
-import { ArrowLeft, Search, HeartHandshake, History, X, UserCircle, CalendarDays } from 'lucide-react';
+import { ArrowLeft, Search, HeartHandshake, History, X, UserCircle, CalendarDays, ClipboardEdit } from 'lucide-react';
 import IslamicLoader from '../../../components/IslamicLoader';
 
+// আলাদা করা মডাল কম্পোনেন্টটি ইমপোর্ট করুন
+import DonationFormModal from '../../../components/DonationFormModal'; 
+
 function AsahayReceiverContent() {
-  // fetchData তে FUND_ID পাস করা হয়েছে যাতে স্টোর থেকেও ফিল্টারড ডাটা আসে
   const { transactions, isLoading, fetchData } = useStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedReceiver, setSelectedReceiver] = useState(null);
+  const [isFormOpen, setIsFormOpen] = useState(false);
 
   const FUND_ID = 'asahay-sahajjo';
 
@@ -20,17 +23,13 @@ function AsahayReceiverContent() {
     fetchData(FUND_ID); 
   }, [fetchData]);
 
-  // সাহায্য গ্রহীতাদের ডাটা প্রসেসিং
   const asahayReceivers = useMemo(() => {
     const receiverMap = new Map();
-
     if (!transactions || !Array.isArray(transactions)) return [];
 
-    // ১. শুধুমাত্র 'asahay-sahajjo' ফান্ডের ট্রানজেকশন আলাদা করা
     const filteredTransactions = transactions.filter(t => t.fundId === FUND_ID);
 
     filteredTransactions.forEach((t) => {
-      // ২. টাইপ চেক: দান (Donation) বাদ দিয়ে শুধু ব্যয় (Expense) বা সরাসরি গ্রহীতা (Receiver) ডাটা নেওয়া
       if (t.type === 'expense' || t.type === 'receiver') {
         const rawName = t.receiverName || t.name || t.category;
         if (!rawName) return;
@@ -59,13 +58,11 @@ function AsahayReceiverContent() {
 
     let list = Array.from(receiverMap.values());
 
-    // সার্চ ফিল্টার
     if (searchTerm.trim()) {
       const term = searchTerm.trim().toLowerCase();
       list = list.filter((r) => r.name.toLowerCase().includes(term));
     }
 
-    // বেশি সহায়তা যারা পেয়েছে তাদের আগে রাখা
     return list.sort((a, b) => b.totalReceived - a.totalReceived);
   }, [transactions, searchTerm]);
 
@@ -75,24 +72,39 @@ function AsahayReceiverContent() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-20">
+      
       {/* টপ বার */}
       <div className="bg-white/80 backdrop-blur-md border-b border-rose-50 sticky top-0 z-40 p-4 shadow-sm">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          <Link href={`/funds/${FUND_ID}`}>
-            <button className="p-2 md:p-3 bg-white border border-rose-100 text-rose-600 rounded-2xl hover:bg-rose-50 transition shadow-sm">
-              <ArrowLeft size={20} />
-            </button>
-          </Link>
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-rose-300" size={18} />
-            <input
-              type="text"
-              placeholder="গ্রহীতার নাম খুঁজুন..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-rose-50/30 border border-rose-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-rose-400 text-sm font-medium"
-            />
+          
+          <div className="flex items-center gap-3 flex-1 max-w-xl">
+            <Link href={`/funds/${FUND_ID}`}>
+              <button className="p-2 md:p-3 bg-white border border-rose-100 text-rose-600 rounded-2xl hover:bg-rose-50 transition shadow-sm">
+                <ArrowLeft size={20} />
+              </button>
+            </Link>
+            
+            <div className="relative flex-1">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-rose-300" size={18} />
+              <input
+                type="text"
+                placeholder="গ্রহীতার নাম খুঁজুন..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-rose-50/30 border border-rose-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-rose-400 text-sm font-medium"
+              />
+            </div>
           </div>
+
+          {/* "আবেদন করুন" বাটন */}
+          <button 
+            onClick={() => setIsFormOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-black text-xs md:text-sm rounded-2xl transition-all shadow-md active:scale-95 shrink-0"
+          >
+            <ClipboardEdit size={16} />
+            <span>আবেদন করুন</span>
+          </button>
+          
         </div>
       </div>
 
@@ -139,7 +151,7 @@ function AsahayReceiverContent() {
         )}
       </div>
 
-      {/* Modal */}
+      {/* সাহায্য গ্রহীতার ডিটেইলস Modal */}
       {selectedReceiver && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white w-full max-w-xl rounded-[2.5rem] p-6 md:p-10 relative shadow-2xl animate-in zoom-in duration-200 max-h-[90vh] flex flex-col">
@@ -162,7 +174,7 @@ function AsahayReceiverContent() {
 
             <div className="flex-1 overflow-y-auto pr-1 space-y-4">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-2 flex items-center gap-2">
-                <History size={12} /> সহায়তার ইতিহাস
+                <History size={12} />  সহায়তার ইতিহাস
               </p>
               
               {selectedReceiver.history
@@ -175,8 +187,8 @@ function AsahayReceiverContent() {
                           <UserCircle size={20} />
                         </div>
                         <div>
-                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-tighter">ব্যয়ের খাত</p>
-                          <p className="font-black text-slate-800 italic">{t.category || t.note || 'সাধারণ সহায়তা'}</p>
+                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-tighter">ব্যয়ের খাত</p>
+                          <p className="font-black text-slate-800 italic">{t.category || t.note || 'সাধারণ সহায়তা'}</p>
                         </div>
                       </div>
                       <div className="text-right">
@@ -199,7 +211,7 @@ function AsahayReceiverContent() {
 
             <div className="mt-6 pt-6 border-t border-slate-100 flex justify-between items-center bg-white">
                 <div>
-                  <p className="text-slate-400 font-black uppercase text-[10px] tracking-widest">সর্বমোট পেয়েছেন</p>
+                  <p className="text-slate-400 font-black uppercase text-[10px] tracking-widest">সর্বমোট পেয়েছেন</p>
                   <p className="text-3xl font-black text-slate-900 italic">৳ {selectedReceiver.totalReceived.toLocaleString('bn-BD')}</p>
                 </div>
                 <p className="text-[9px] font-black text-rose-500 uppercase tracking-widest italic">{selectedReceiver.count}টি রেকর্ড</p>
@@ -207,6 +219,13 @@ function AsahayReceiverContent() {
           </div>
         </div>
       )}
+
+      {/* আলাদা করা মডাল কম্পোনেন্ট কল */}
+      <DonationFormModal 
+        isOpen={isFormOpen} 
+        onClose={() => setIsFormOpen(false)} 
+      />
+
     </div>
   );
 }
