@@ -25,7 +25,7 @@ export default function AsahayDashboards() {
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [inputPasskey, setInputPasskey] = useState('');
   const [error, setError] = useState(false);
-  const [activeForm, setActiveForm] = useState('donation'); // 'donation', 'expense', 'pending'
+  const [activeForm, setActiveForm] = useState('donation'); 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deleteModal, setDeleteModal] = useState({ show: false, id: null });
   const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
@@ -33,30 +33,25 @@ export default function AsahayDashboards() {
   const [allDonors, setAllDonors] = useState([]);
   const [localPendingRequests, setLocalPendingRequests] = useState([]);
 
-  // ফরম স্টেট
+  // ফরম স্টেট (ফিল্ডগুলো নিশ্চিত করা হয়েছে)
   const [donation, setDonation] = useState({ donorName: '', donorPhone: '', donorAddress: '', receiverName: '', receiverPhone: '', receiverAddress: '', amount: '', note: '' });
   const [expense, setExpense] = useState({ receiverName: '', receiverPhone: '', receiverAddress: '', amount: '', note: '' });
 
-  // ৩. ডাটা লোড করার ফিক্সড মেথড (কনসোল লগসহ ইউনিভার্সাল ফেচ)
+  // ৩. ডাটা লোড করার ফিক্সড মেথড
   const loadAllData = async () => {
     try {
       if (typeof fetchData === 'function') await fetchData(FUND_ID);
       if (typeof fetchPendingRequests === 'function') await fetchPendingRequests(FUND_ID);
 
-      // ফিল্টারিং ছাড়া সরাসরি মেইন রুট থেকে ডাটা আনা হচ্ছে যাতে মিস না হয়
       const res = await fetch(`${BACKEND_URL}/api/applications`);
       if (res.ok) {
         const data = await res.json();
-        
-        // আপনার ব্রাউজারের কনসোলে (F12) ডাটার অবজেক্ট চেক করার জন্য লগ
         console.log("সার্ভার থেকে আসা লাইভ ডাটা:", data);
 
-        // ডাটাবেজের ফান্ড আইডি বা স্ট্যাটাস বড়/ছোট হাতের অক্ষরে থাকলেও যেন ফিল্টার কাজ করে
         const pendingData = data.filter(item => {
           const itemFund = item.fundId || item.fund || '';
           const itemStatus = item.status || '';
           
-          // ফান্ডের নাম মিললে এবং স্ট্যাটাস পেন্ডিং হলে (অথবা স্ট্যাটাস না থাকলে ডিফল্ট পেন্ডিং)
           return (
             itemFund.toLowerCase().includes('asahay') && 
             (itemStatus.toLowerCase() === 'pending' || itemStatus === '')
@@ -66,11 +61,10 @@ export default function AsahayDashboards() {
         setLocalPendingRequests(pendingData);
       }
     } catch (err) {
-      console.error("ডাটা লোড করতে সমস্যা হয়েছে:", err);
+      console.error("ডাটা লোড করতে সমস্যা হয়েছে:", err);
     }
   };
 
-  // স্টোরের ডাটা আপডেট হলে লোকাল স্টেটেও সিঙ্ক হবে
   useEffect(() => {
     if (pendingRequests && pendingRequests.length > 0) {
       setLocalPendingRequests(pendingRequests);
@@ -85,7 +79,6 @@ export default function AsahayDashboards() {
     }
   }, []);
 
-  // ডোনোরদের নামের সাজেশন লিস্ট তৈরি
   useEffect(() => {
     if (transactions && transactions.length > 0) {
       const currentNames = transactions
@@ -205,7 +198,6 @@ export default function AsahayDashboards() {
     setIsSubmitting(false);
   };
 
-  // ৬. অথোরাইজেশন ভিউ চেক
   if (!isAuthorized) {
     return (
       <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6">
@@ -234,37 +226,28 @@ export default function AsahayDashboards() {
             </button>
           </form>
         </div>
-        <style jsx>{`
-          .shake-animation { animation: shake 0.5s ease-in-out; }
-          @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-10px); }
-            75% { transform: translateX(10px); }
-          }
-        `}</style>
       </div>
     );
   }
 
-  // ৭. মেইন ড্যাশবোর্ড লেআউট রেন্ডার
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-8 lg:p-12 text-slate-900">
       <div className="max-w-6xl mx-auto">
         
         {/* লাইভ এলার্ট নোটিফিকেশন বার */}
         {localPendingRequests.length > 0 && (
-          <div className="mb-6 bg-amber-500 text-white font-black px-6 py-3.5 rounded-[20px] flex items-center justify-between shadow-lg shadow-amber-500/20 animate-in fade-in slide-in-from-top duration-300">
+          <div className="mb-6 bg-amber-500 text-white font-black px-6 py-3.5 rounded-[20px] flex items-center justify-between shadow-lg shadow-amber-500/20">
             <div className="flex items-center gap-3 text-xs md:text-sm">
               <span className="relative flex h-3 w-3">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600"></span>
               </span>
               <Bell size={16} className="animate-bounce" />
-              <span>মনোযোগ দিন: ড্যাশবোর্ডে {localPendingRequests.length}টি নতুন আবেদন অনুমোদনের অপেক্ষায় আছে!</span>
+              <span>মনোযোগ দিন: ড্যাশবোর্ডে {localPendingRequests.length}টি নতুন আবেদন অনুমোদনের অপেক্ষায় আছে!</span>
             </div>
             <button 
               onClick={() => setActiveForm('pending')} 
-              className="bg-white text-amber-700 px-4 py-1.5 rounded-xl text-xs font-black shadow-sm hover:bg-slate-100 transition-all uppercase tracking-wider"
+              className="bg-white text-amber-700 px-4 py-1.5 rounded-xl text-xs font-black shadow-sm hover:bg-slate-100 transition-all"
             >
               দেখুন
             </button>
@@ -331,36 +314,39 @@ export default function AsahayDashboards() {
             </h2>
             <div className="divide-y divide-slate-100">
               {localPendingRequests.length > 0 ? (
-                localPendingRequests.map((req) => (
-                  <div key={req._id} className="py-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:bg-slate-50/50 p-4 rounded-2xl transition-all">
-                    <div>
-                      <div className="flex items-center gap-3 mb-1">
-                        <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${req.type === 'donation' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-                          {req.type === 'donation' ? 'ডোনোর আবেদন' : 'সাহায্য প্রার্থী'}
-                        </span>
-                        {/* ফিক্সড ম্যাপিং: ডাটাবেজে name অথবা donorName/receiverName যাই থাকুক ডাটা রেন্ডার হবে */}
-                        <p className="font-black text-slate-800 text-lg">
-                          {req.name || req.receiverName || req.donorName || "নামহীন আবেদন"}
+                localPendingRequests.map((req) => {
+                  // ফিক্সড টাইপ চেকিং: যদি ডাটায় 'donation' বা 'donor' কিছু থাকে তবেই ডোনোর, অন্যথায় সাহায্যপ্রার্থী
+                  const isDonationType = req.type?.toLowerCase().includes('donat') || req.type?.toLowerCase().includes('donor') || req.donorName;
+                  
+                  return (
+                    <div key={req._id} className="py-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:bg-slate-50/50 p-4 rounded-2xl transition-all">
+                      <div>
+                        <div className="flex items-center gap-3 mb-1">
+                          <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${isDonationType ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                            {isDonationType ? 'ডোনোর আবেদন' : 'সাহায্য প্রার্থী'}
+                          </span>
+                          <p className="font-black text-slate-800 text-lg">
+                            {req.donorName || req.receiverName || req.name || "নামহীন আবেদন"}
+                          </p>
+                        </div>
+                        <p className="text-xs text-slate-500 font-medium">
+                          মোবাইল: {req.donorPhone || req.receiverPhone || req.phone || "নেই"} | 
+                          ঠিকানা: {req.donorAddress || req.receiverAddress || req.address || "নেই"}
                         </p>
+                        <p className="text-xs text-slate-400 mt-2 font-bold italic">নোট: {req.note || req.message || 'কোন বর্ণনা নেই'}</p>
                       </div>
-                      {/* ফিক্সড মোবাইল ও ঠিকানা ম্যাপিং */}
-                      <p className="text-xs text-slate-500 font-medium">
-                        মোবাইল: {req.phone || req.receiverPhone || req.donorPhone || "নেই"} | 
-                        ঠিকানা: {req.address || req.receiverAddress || req.donorAddress || "নেই"}
-                      </p>
-                      <p className="text-xs text-slate-400 mt-2 font-bold italic">নোট: {req.note || req.message || 'কোন বর্ণনা নেই'}</p>
+                      <div className="flex items-center gap-4 w-full md:w-auto justify-end border-t md:border-0 pt-4 md:pt-0">
+                        <span className="text-xl font-black text-slate-800 mr-2">৳{Number(req.amount || 0).toLocaleString('bn-BD')}</span>
+                        <button onClick={() => handleReject(req._id)} className="p-3 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all" title="বাতিল করুন">
+                          <X size={18} />
+                        </button>
+                        <button onClick={() => handleApprove(req._id)} className="p-3 bg-emerald-50 text-emerald-500 hover:bg-emerald-500 hover:text-white rounded-xl transition-all" title="অনুমোদন করুন">
+                          <Check size={18} />
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-4 w-full md:w-auto justify-end border-t md:border-0 pt-4 md:pt-0">
-                      <span className="text-xl font-black text-slate-800 mr-2">৳{Number(req.amount || 0).toLocaleString('bn-BD')}</span>
-                      <button onClick={() => handleReject(req._id)} className="p-3 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all" title="বাতিল করুন">
-                        <X size={18} />
-                      </button>
-                      <button onClick={() => handleApprove(req._id)} className="p-3 bg-emerald-50 text-emerald-500 hover:bg-emerald-500 hover:text-white rounded-xl transition-all" title="অনুমোদন করুন">
-                        <Check size={18} />
-                      </button>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               ) : (
                 <div className="p-20 text-center text-slate-300 font-bold italic uppercase tracking-widest text-xs">নতুন কোনো আবেদন নেই</div>
               )}
@@ -389,6 +375,8 @@ export default function AsahayDashboards() {
                       </div>
                     )}
                   </div>
+                  <InputGroup label="দানদাতার মোবাইল নম্বর" placeholder="01XXXXXXXXX" value={donation.donorPhone} onChange={(v)=>setDonation({...donation, donorPhone:v})} />
+                  <InputGroup label="দানদাতার ঠিকানা" placeholder="ঠিকানা লিখুন" value={donation.donorAddress} onChange={(v)=>setDonation({...donation, donorAddress:v})} />
                   <InputGroup label="সংগ্রাহকের নাম *" placeholder="সংগ্রাহক" value={donation.receiverName} onChange={(v)=>setDonation({...donation, receiverName:v})} />
                   <InputGroup label="টাকার পরিমাণ *" type="number" placeholder="0.00" value={donation.amount} onChange={(v)=>setDonation({...donation, amount:v})} isAmount color="emerald" />
                   <InputGroup label="নোট" placeholder="..." value={donation.note} onChange={(v)=>setDonation({...donation, note:v})} />
@@ -462,7 +450,7 @@ export default function AsahayDashboards() {
 
       {/* Notification */}
       {notification.show && (
-        <div className={`fixed top-5 right-5 z-[500] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl animate-in slide-in-from-right duration-300 ${notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>
+        <div className={`fixed top-5 right-5 z-[500] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl ${notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>
           {notification.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
           <span className="font-bold text-sm">{notification.message}</span>
         </div>
@@ -471,7 +459,6 @@ export default function AsahayDashboards() {
   );
 }
 
-// সাব-কম্পোনেন্টসমূহ 
 function StatCard({ title, amount, icon, color }) {
     const colors = { emerald: 'text-emerald-600 bg-emerald-50', red: 'text-red-600 bg-red-50', indigo: 'text-indigo-600 bg-indigo-50' };
     return (
