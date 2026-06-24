@@ -4,61 +4,70 @@ import { useState, useEffect, useMemo } from 'react';
 import { 
   Gift, ArrowDown, ArrowLeft, Trash2, Loader2, Wallet, 
   TrendingUp, TrendingDown, PlusCircle, MinusCircle, 
-  CheckCircle2, AlertCircle, Lock, Unlock, Key, User, LogOut,
-  Inbox, Check, X, Bell
+  CheckCircle2, AlertCircle, Lock, Key, Unlock, User, 
+  Inbox, Check, X, Bell, Search, Calculator, Edit3, EyeOff
 } from 'lucide-react';
 import Link from 'next/link';
 import { useStore } from '../../../lib/store';
 
 export default function AsahayDashboards() {
-  // ১. স্টোর ও কনস্ট্যান্ট ডিক্লারেশন
   const { 
-    transactions, pendingRequests, fetchData, fetchPendingRequests, 
+    transactions = [], pendingRequests = [], fetchData, fetchPendingRequests, 
     addTransaction, deleteTransaction, approveRequest, rejectRequest 
   } = useStore();
   
   const FUND_ID = 'asahay-sahajjo';
-  const ADMIN_PASSKEY = "admin1234";
   const BACKEND_URL = 'https://probashi-funds-api.onrender.com';
+  const ADMIN_PASSKEY = "admin1234";
 
-  // ২. সমস্ত useState একসাথে সবার উপরে
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [inputPasskey, setInputPasskey] = useState('');
-  const [error, setError] = useState(false);
+  const [passError, setPassError] = useState(false);
+  
   const [activeForm, setActiveForm] = useState('donation'); 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [deleteModal, setDeleteModal] = useState({ show: false, id: null });
   const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
+  
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [allDonors, setAllDonors] = useState([]);
   const [localPendingRequests, setLocalPendingRequests] = useState([]);
+  const [rejectedRequests, setRejectedRequests] = useState([]);
 
-  // ফরম স্টেট (ফিল্ডগুলো নিশ্চিত করা হয়েছে)
+  // এডিট মোড স্টেট
+  const [editingRequestId, setEditingRequestId] = useState(null);
+  const [editedAmount, setEditedAmount] = useState('');
+
+  // ফর্ম স্টেটস
   const [donation, setDonation] = useState({ donorName: '', donorPhone: '', donorAddress: '', receiverName: '', receiverPhone: '', receiverAddress: '', amount: '', note: '' });
   const [expense, setExpense] = useState({ receiverName: '', receiverPhone: '', receiverAddress: '', amount: '', note: '' });
 
-  // ৩. ডাটা লোড করার ফিক্সড মেথড
+  // ডাটা লোড লজিক
   const loadAllData = async () => {
     try {
       if (typeof fetchData === 'function') await fetchData(FUND_ID);
-      if (typeof fetchPendingRequests === 'function') await fetchPendingRequests(FUND_ID);
-
-      const res = await fetch(`${BACKEND_URL}/api/applications`);
+      
+      const res = await fetch(`${BACKEND_URL}/api/${FUND_ID}/pending`);
       if (res.ok) {
         const data = await res.json();
-        console.log("সার্ভার থেকে আসা লাইভ ডাটা:", data);
-
-        const pendingData = data.filter(item => {
-          const itemFund = item.fundId || item.fund || '';
-          const itemStatus = item.status || '';
-          
-          return (
-            itemFund.toLowerCase().includes('asahay') && 
-            (itemStatus.toLowerCase() === 'pending' || itemStatus === '')
-          );
-        });
-
-        setLocalPendingRequests(pendingData);
+        setLocalPendingRequests(data.filter(item => (item.status || 'pending').toLowerCase() === 'pending'));
+        setRejectedRequests(data.filter(item => (item.status || '').toLowerCase() === 'rejected'));
+      } else {
+        const altRes = await fetch(`${BACKEND_URL}/api/applications`);
+        if (altRes.ok) {
+          const altData = await altRes.json();
+          const filteredPending = altData.filter(item => {
+            const fId = item.fundId || item.fund || '';
+            const status = item.status || 'pending';
+            return fId.toLowerCase().includes('asahay') && status.toLowerCase() === 'pending';
+          });
+          const filteredRejected = altData.filter(item => {
+            const fId = item.fundId || item.fund || '';
+            const status = item.status || '';
+            return fId.toLowerCase().includes('asahay') && status.toLowerCase() === 'rejected';
+          });
+          setLocalPendingRequests(filteredPending);
+          setRejectedRequests(filteredRejected);
+        }
       }
     } catch (err) {
       console.error("ডাটা লোড করতে সমস্যা হয়েছে:", err);
@@ -67,7 +76,8 @@ export default function AsahayDashboards() {
 
   useEffect(() => {
     if (pendingRequests && pendingRequests.length > 0) {
-      setLocalPendingRequests(pendingRequests);
+      setLocalPendingRequests(pendingRequests.filter(r => (r.status || 'pending').toLowerCase() === 'pending'));
+      setRejectedRequests(pendingRequests.filter(r => (r.status || '').toLowerCase() === 'rejected'));
     }
   }, [pendingRequests]);
 
@@ -79,38 +89,42 @@ export default function AsahayDashboards() {
     }
   }, []);
 
+  // ডোনোর সাজেশন্স ও অন্যান্য মেমো ফিল্টার
   useEffect(() => {
     if (transactions && transactions.length > 0) {
       const currentNames = transactions
         .filter(t => t.type === 'donation' && t.donorName)
         .map(t => t.donorName.trim());
-      
       setAllDonors(prev => [...new Set([...prev, ...currentNames])]);
     }
   }, [transactions]);
 
-  // ৪. useMemo লজিকসমূহ
   const filteredDonors = useMemo(() => {
     const searchTerm = donation.donorName.toLowerCase().trim();
     if (!searchTerm) return [];
     return allDonors.filter(name => name.toLowerCase().includes(searchTerm));
   }, [allDonors, donation.donorName]);
 
-  const stats = useMemo(() => {
-    const currentFundData = transactions.filter(t => t.fundId === FUND_ID || !t.fundId);
-    const totalDonation = currentFundData.filter(t => t.type === 'donation').reduce((sum, t) => sum + Number(t.amount), 0);
-    const totalExpense = currentFundData.filter(t => t.type === 'expense').reduce((sum, t) => sum + Number(t.amount), 0);
-    return { totalDonation, totalExpense, balance: totalDonation - totalExpense };
+  const currentFundTransactions = useMemo(() => {
+    return transactions.filter(t => {
+      const fId = t.fundId || t.fund || '';
+      return fId.toLowerCase().includes('asahay') || fId === '';
+    });
   }, [transactions]);
+
+  const stats = useMemo(() => {
+    const totalDonation = currentFundTransactions.filter(t => t.type === 'donation').reduce((sum, t) => sum + Number(t.amount || 0), 0);
+    const totalExpense = currentFundTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + Number(t.amount || 0), 0);
+    return { totalDonation, totalExpense, balance: totalDonation - totalExpense };
+  }, [currentFundTransactions]);
 
   const listData = useMemo(() => {
-    return transactions
-      .filter(t => t.fundId === FUND_ID || !t.fundId)
+    return currentFundTransactions
       .slice()
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [transactions]);
+      .sort((a, b) => new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime());
+  }, [currentFundTransactions]);
 
-  // ৫. অ্যাকশন হ্যান্ডলার মেথডসমূহ
+  // হ্যান্ডলার্স
   const handleLogin = (e) => {
     e.preventDefault();
     if (inputPasskey === ADMIN_PASSKEY) {
@@ -119,8 +133,8 @@ export default function AsahayDashboards() {
       notify("ড্যাশবোর্ড আনলক হয়েছে!");
       loadAllData();
     } else {
-      setError(true);
-      setTimeout(() => setError(false), 2000);
+      setPassError(true);
+      setTimeout(() => setPassError(false), 2000);
       notify("ভুল পাসকোড!", "error");
     }
   };
@@ -136,21 +150,29 @@ export default function AsahayDashboards() {
     setTimeout(() => setNotification(prev => ({ ...prev, show: false })), 3000);
   };
 
-  const handleApprove = async (id) => {
+  // কাস্টম অ্যামাউন্টসহ বা নরমাল অনুমোদন হ্যান্ডলার
+  const handleApprove = async (id, customAmount = null) => {
     try {
       let success = false;
+      const targetAmount = customAmount !== null ? Number(customAmount) : null;
+
       if (typeof approveRequest === 'function') {
-        success = await approveRequest(id, FUND_ID);
+        success = await approveRequest(id, FUND_ID, targetAmount);
       } else {
-        const res = await fetch(`${BACKEND_URL}/api/applications/${id}/approve`, { method: 'POST' });
+        const body = targetAmount ? JSON.stringify({ amount: targetAmount }) : null;
+        const res = await fetch(`${BACKEND_URL}/api/${FUND_ID}/pending/${id}/approve`, { 
+          method: 'POST',
+          headers: body ? { 'Content-Type': 'application/json' } : {},
+          body
+        });
         success = res.ok;
       }
 
       if (success) {
         notify("আবেদনটি সফলভাবে অনুমোদন করা হয়েছে!");
+        setEditingRequestId(null);
+        setEditedAmount('');
         await loadAllData(); 
-      } else {
-        notify("অনুমোদন করা যায়নি", "error");
       }
     } catch (error) {
       notify("সার্ভার ত্রুটি", "error");
@@ -163,24 +185,34 @@ export default function AsahayDashboards() {
       if (typeof rejectRequest === 'function') {
         success = await rejectRequest(id, FUND_ID);
       } else {
-        const res = await fetch(`${BACKEND_URL}/api/applications/${id}/reject`, { method: 'POST' });
-        success = res.ok;
+        const res = await fetch(`${BACKEND_URL}/api/${FUND_ID}/pending/${id}/reject`, { method: 'POST' });
+        // যদি ব্যাকএন্ডে ডিরেক্ট রিজেক্ট রাউট না থাকে তবে পূর্বের ডিলিট মেথড ব্যাকআপ হিসেবে কাজ করবে
+        if (!res.ok) {
+          const fallbackRes = await fetch(`${BACKEND_URL}/api/${FUND_ID}/pending/${id}`, { method: 'DELETE' });
+          success = fallbackRes.ok;
+        } else {
+          success = res.ok;
+        }
       }
-
       if (success) {
-        notify("আবেদনটি বাতিল করা হয়েছে", "error");
+        notify("আবেদনটি বাতিল তালিকায় যুক্ত করা হয়েছে", "error");
         await loadAllData(); 
-      } else {
-        notify("বাতিল করা যায়নি", "error");
       }
     } catch (error) {
       notify("সার্ভার ত্রুটি", "error");
     }
   };
 
-  const handleSubmitData = async () => {
+  const handleSubmitData = async (e) => {
+    if (e) e.preventDefault();
     setIsSubmitting(true);
+    
     if (activeForm === 'donation') {
+      if (!donation.donorName || !donation.amount) {
+        notify("দাতার নাম ও টাকার পরিমাণ দিন", "error");
+        setIsSubmitting(false);
+        return;
+      }
       const success = await addTransaction({ ...donation, type: 'donation', fundId: FUND_ID, date: new Date().toISOString() }, FUND_ID);
       if (success) {
         setDonation({ donorName: '', donorPhone: '', donorAddress: '', receiverName: '', receiverPhone: '', receiverAddress: '', amount: '', note: '' });
@@ -188,6 +220,11 @@ export default function AsahayDashboards() {
         await loadAllData();
       }
     } else if (activeForm === 'expense') {
+      if (!expense.receiverName || !expense.amount) {
+        notify("খরচের খাত ও পরিমাণ দিন", "error");
+        setIsSubmitting(false);
+        return;
+      }
       const success = await addTransaction({ ...expense, type: 'expense', fundId: FUND_ID, date: new Date().toISOString() }, FUND_ID);
       if (success) {
         setExpense({ receiverName: '', receiverPhone: '', receiverAddress: '', amount: '', note: '' });
@@ -198,31 +235,36 @@ export default function AsahayDashboards() {
     setIsSubmitting(false);
   };
 
+  useEffect(() => {
+    const handleClickOutside = () => setShowSuggestions(false);
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
+
   if (!isAuthorized) {
     return (
-      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6">
-        <div className={`bg-white rounded-[40px] p-10 max-w-sm w-full shadow-2xl border transition-all duration-300 ${error ? 'border-red-500 shake-animation' : 'border-slate-100'}`}>
-          <div className="w-20 h-20 bg-slate-900 text-white rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-xl">
-            <Lock size={35} />
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-6">
+        <div className={`bg-white rounded-[2.5rem] p-10 max-w-sm w-full shadow-2xl border transition-all duration-300 ${passError ? 'border-red-500 scale-95 shadow-red-100' : 'border-slate-100'}`}>
+          <div className="w-16 h-16 bg-slate-900 text-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
+            <Lock size={30} />
           </div>
-          <h2 className="text-2xl font-black text-slate-800 mb-2 text-center italic uppercase tracking-tighter">অ্যাডমিন এক্সেস</h2>
-          <p className="text-slate-400 text-xs mb-8 text-center font-bold uppercase tracking-widest">সিক্রেট পাসকোড প্রদান করুন</p>
+          <h2 className="text-xl font-black text-slate-800 text-center mb-1 uppercase tracking-tight">অ্যাডমিন এক্সেস</h2>
+          <p className="text-slate-400 text-[10px] text-center font-bold uppercase tracking-widest mb-8">সিক্রেট পাসকোড দিন</p>
           
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="relative">
-              <Key className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${error ? 'text-red-500' : 'text-slate-300'}`} size={20} />
+              <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
               <input 
                 type="password" 
-                placeholder="পাসকোড লিখুন" 
+                placeholder="পাসওয়ার্ড" 
                 autoFocus
                 value={inputPasskey}
                 onChange={(e) => setInputPasskey(e.target.value)}
-                className="w-full pl-12 pr-4 py-4 bg-slate-50 border placeholder:text-slate-300 text-slate-800 border-slate-200 rounded-2xl outline-none focus:border-slate-900 transition-all font-black text-center text-lg tracking-[10px]" 
+                className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 text-slate-800 rounded-2xl outline-none focus:border-slate-900 transition-all font-black text-center text-xl tracking-[0.5em]" 
               />
             </div>
-
-            <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black shadow-lg active:scale-95 transition-all uppercase tracking-widest flex items-center justify-center gap-2">
-              আনলক <Unlock size={18} />
+            <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2">
+              Anlock Karun <Unlock size={18} />
             </button>
           </form>
         </div>
@@ -231,260 +273,286 @@ export default function AsahayDashboards() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-8 lg:p-12 text-slate-900">
+    <div className="min-h-screen bg-slate-50 p-4 md:p-8 text-slate-900 relative">
+      {notification.show && (
+        <div className={`fixed top-5 right-5 z-[150] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl animate-in slide-in-from-right duration-300 ${notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>
+          {notification.type === 'success' ? <CheckCircle2 /> : <AlertCircle />}
+          <span className="font-bold">{notification.message}</span>
+        </div>
+      )}
+
       <div className="max-w-6xl mx-auto">
-        
-        {/* লাইভ এলার্ট নোটিফিকেশন বার */}
         {localPendingRequests.length > 0 && (
-          <div className="mb-6 bg-amber-500 text-white font-black px-6 py-3.5 rounded-[20px] flex items-center justify-between shadow-lg shadow-amber-500/20">
+          <div className="mb-6 bg-amber-500 text-white font-black px-6 py-3.5 rounded-2xl flex items-center justify-between shadow-lg shadow-amber-500/20">
             <div className="flex items-center gap-3 text-xs md:text-sm">
-              <span className="relative flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600"></span>
-              </span>
               <Bell size={16} className="animate-bounce" />
-              <span>মনোযোগ দিন: ড্যাশবোর্ডে {localPendingRequests.length}টি নতুন আবেদন অনুমোদনের অপেক্ষায় আছে!</span>
+              <span>ড্যাশবোর্ডে {localPendingRequests.length}টি নতুন আবেদন পেন্ডিং আছে!</span>
             </div>
-            <button 
-              onClick={() => setActiveForm('pending')} 
-              className="bg-white text-amber-700 px-4 py-1.5 rounded-xl text-xs font-black shadow-sm hover:bg-slate-100 transition-all"
-            >
-              দেখুন
-            </button>
+            <button onClick={() => setActiveForm('pending')} className="bg-white text-amber-700 px-4 py-1.5 rounded-xl text-xs font-black shadow-sm hover:bg-slate-100 transition-all">দেখুন</button>
           </div>
         )}
 
-        {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-center mb-12 gap-6 bg-white/50 backdrop-blur-md p-6 rounded-[32px] border border-white shadow-sm">
-          <Link href={`/funds/${FUND_ID}`}>
-            <button className="group flex items-center gap-2 bg-white border border-slate-200 px-5 py-3 rounded-2xl font-bold text-slate-600 hover:bg-slate-900 hover:text-white transition-all shadow-sm active:scale-95">
-              <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" /> 
-              <span className="text-xs uppercase tracking-wider">ওয়েবসাইট</span>
-            </button>
-          </Link>
-
-          <div className="text-center flex-1">
-            <h1 className="text-3xl md:text-4xl font-black text-slate-900 italic uppercase tracking-tighter mb-1">
-              অসহায় <span className="text-emerald-600">সাহায্য</span>
-            </h1>
-            <p className="text-xs font-black text-slate-400 uppercase tracking-[0.3em]">Admin Control Panel</p>
+        {/* Top Navbar */}
+        <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-6">
+          <div className="flex gap-4">
+            <Link href={`/funds/${FUND_ID}`}>
+              <button className="group flex items-center gap-2 bg-white border border-slate-200 px-5 py-2.5 rounded-2xl shadow-sm font-semibold text-slate-600 hover:bg-slate-50 transition-all">
+                <ArrowLeft size={18} /> পিছনে
+              </button>
+            </Link>
+            <button onClick={handleLogout} className="text-xs font-bold text-red-500 border border-red-100 px-4 rounded-2xl bg-red-50/50 hover:bg-red-50 transition-all">লগ আউট</button>
           </div>
-
-          <button onClick={handleLogout} className="flex items-center gap-2 px-6 py-3 bg-red-50 text-red-600 border border-red-100 rounded-2xl text-xs font-black uppercase hover:bg-red-600 hover:text-white transition-all active:scale-95">
-            লগ আউট <LogOut size={16} />
-          </button>
+          <div className="text-center md:text-right">
+            <h1 className="text-3xl md:text-4xl font-black text-slate-800 flex items-center gap-3">
+              <span className="bg-emerald-100 px-3 py-1 rounded-xl text-emerald-600 text-sm font-bold uppercase">Admin</span> 
+              অসহায় সাহায্য তহবিল
+            </h1>
+          </div>
         </div>
 
-        {/* Stats */}
+        {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
           <StatCard title="মোট দান" amount={stats.totalDonation} icon={<TrendingUp />} color="emerald" />
           <StatCard title="মোট খরচ" amount={stats.totalExpense} icon={<TrendingDown />} color="red" />
-          <StatCard title="ব্যালেন্স" amount={stats.balance} icon={<Wallet />} color="indigo" />
+          <StatCard title="বর্তমান ব্যালেন্স" amount={stats.balance} icon={<Wallet />} color="indigo" />
         </div>
 
-        {/* Tabs */}
+        {/* Navigation Tabs */}
         <div className="flex justify-center mb-8">
-          <div className="inline-flex p-1.5 bg-slate-200/50 rounded-[20px] w-full max-w-xl shadow-inner border border-white">
-            <button onClick={() => setActiveForm('donation')} className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-[15px] font-bold transition-all ${activeForm === 'donation' ? 'bg-white text-emerald-600 shadow-md' : 'text-slate-500'}`}>
-              <PlusCircle size={18}/> দান সংগ্রহ
+          <div className="inline-flex p-1.5 bg-slate-200/50 rounded-[20px] w-full max-w-xl shadow-inner border border-slate-200">
+            <button onClick={() => setActiveForm('donation')} className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-[15px] text-xs md:text-sm font-bold transition-all ${activeForm === 'donation' ? 'bg-white text-emerald-600 shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}>
+              <PlusCircle size={16}/> দান সংগ্রহ
             </button>
-            <button onClick={() => setActiveForm('expense')} className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-[15px] font-bold transition-all ${activeForm === 'expense' ? 'bg-white text-red-600 shadow-md' : 'text-slate-500'}`}>
-              <MinusCircle size={18}/> খরচ/সাহায্য
+            <button onClick={() => setActiveForm('expense')} className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-[15px] text-xs md:text-sm font-bold transition-all ${activeForm === 'expense' ? 'bg-white text-red-600 shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}>
+              <MinusCircle size={16}/> খরচ/সাহায্য
             </button>
-            
-            <button 
-              onClick={() => { setActiveForm('pending'); loadAllData(); }} 
-              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-[15px] font-bold transition-all relative ${activeForm === 'pending' ? 'bg-white text-amber-600 shadow-md' : 'text-slate-500'}`}
-            >
-              <Inbox size={18}/> আবেদনসমূহ
-              {localPendingRequests.length > 0 && (
-                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[11px] font-black min-w-[22px] h-[22px] px-1 rounded-full flex items-center justify-center border-2 border-white shadow-md animate-pulse">
-                  {localPendingRequests.length}
-                </span>
-              )}
+            <button onClick={() => setActiveForm('pending')} className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-[15px] text-xs md:text-sm font-bold transition-all relative ${activeForm === 'pending' ? 'bg-white text-amber-600 shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}>
+              <Inbox size={16}/> আবেদন ({localPendingRequests.length})
+            </button>
+            <button onClick={() => setActiveForm('rejected')} className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-[15px] text-xs md:text-sm font-bold transition-all ${activeForm === 'rejected' ? 'bg-white text-rose-600 shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}>
+              <EyeOff size={16}/> বাতিল তালিকা ({rejectedRequests.length})
             </button>
           </div>
         </div>
 
-        {/* Dynamic Content Forms / Pending List */}
-        {activeForm === 'pending' ? (
-          <div className="bg-white p-6 md:p-10 rounded-[40px] shadow-2xl border border-slate-100">
-            <h2 className="text-2xl font-black mb-8 flex items-center gap-3 italic text-amber-700">
-              <Inbox /> পেন্ডিং আবেদন তালিকা ({localPendingRequests.length}টি অবশিষ্ট)
-            </h2>
-            <div className="divide-y divide-slate-100">
-              {localPendingRequests.length > 0 ? (
-                localPendingRequests.map((req) => {
-                  // ফিক্সড টাইপ চেকিং: যদি ডাটায় 'donation' বা 'donor' কিছু থাকে তবেই ডোনোর, অন্যথায় সাহায্যপ্রার্থী
-                  const isDonationType = req.type?.toLowerCase().includes('donat') || req.type?.toLowerCase().includes('donor') || req.donorName;
-                  
-                  return (
-                    <div key={req._id} className="py-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:bg-slate-50/50 p-4 rounded-2xl transition-all">
-                      <div>
-                        <div className="flex items-center gap-3 mb-1">
-                          <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${isDonationType ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-                            {isDonationType ? 'ডোনোর আবেদন' : 'সাহায্য প্রার্থী'}
-                          </span>
-                          <p className="font-black text-slate-800 text-lg">
-                            {req.donorName || req.receiverName || req.name || "নামহীন আবেদন"}
+        {/* Layout Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          
+          {/* Left Column: Forms / Pending / Rejected List */}
+          <div className="lg:col-span-5">
+            <div className={`bg-white p-6 md:p-8 rounded-[2.5rem] shadow-xl border border-slate-100 transition-all duration-300 ${activeForm === 'donation' ? 'border-t-4 border-t-emerald-500' : activeForm === 'expense' ? 'border-t-4 border-t-red-500' : activeForm === 'pending' ? 'border-t-4 border-t-amber-500' : 'border-t-4 border-t-rose-500'}`}>
+              
+              {/* ১. প্রফেশনাল পেন্ডিং আবেদন তালিকা */}
+              {activeForm === 'pending' && (
+                <div>
+                  <h2 className="text-xl font-black mb-6 flex items-center gap-3 text-amber-700">
+                    <Inbox /> পেন্ডিং তালিকা ({localPendingRequests.length}টি)
+                  </h2>
+                  <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
+                    {localPendingRequests.length > 0 ? (
+                      localPendingRequests.map((req) => (
+                        <div key={req._id} className="bg-slate-50/70 border border-slate-100 p-4 rounded-2xl hover:shadow-md transition-all space-y-3">
+                          <div className="flex justify-between items-start gap-2">
+                            <div className="min-w-0">
+                              <p className="font-black text-slate-800 text-sm md:text-base truncate">{req.name || req.donorName || req.receiverName || "নামহীন"}</p>
+                              <p className="text-xs text-slate-400 font-semibold mt-0.5">{req.phone || req.donorPhone || "কোনো নাম্বার নেই"}</p>
+                            </div>
+                            <span className="bg-amber-100 text-amber-700 text-xs px-3 py-1 rounded-full font-black">
+                              ৳{Number(req.amount || 0).toLocaleString('bn-BD')}
+                            </span>
+                          </div>
+                          
+                          <p className="text-xs bg-white p-2.5 rounded-xl text-slate-600 border border-slate-100 italic">
+                            " {req.note || 'কোনো বিবরণ দেওয়া হয়নি'} "
                           </p>
+
+                          {/* এডিট অ্যামাউন্ট সেকশন */}
+                          {editingRequestId === req._id ? (
+                            <div className="flex items-center gap-2 bg-white p-2 rounded-xl border border-emerald-200">
+                              <input 
+                                type="number" 
+                                placeholder="নতুন অ্যামাউন্ট" 
+                                value={editedAmount} 
+                                onChange={(e) => setEditedAmount(e.target.value)}
+                                className="w-full px-3 py-1.5 text-xs font-bold border border-slate-200 rounded-lg outline-none focus:border-emerald-500"
+                              />
+                              <button onClick={() => handleApprove(req._id, editedAmount)} className="p-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-all"><Check size={14}/></button>
+                              <button onClick={() => setEditingRequestId(null)} className="p-2 bg-slate-100 text-slate-500 rounded-lg hover:bg-slate-200 transition-all"><X size={14}/></button>
+                            </div>
+                          ) : (
+                            <div className="flex justify-end gap-2 pt-1 border-t border-dashed border-slate-200">
+                              <button onClick={() => handleReject(req._id)} className="flex items-center gap-1 px-3 py-1.5 bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white rounded-xl text-xs font-bold transition-all">
+                                <X size={12} /> রিজেক্ট
+                              </button>
+                              <button onClick={() => { setEditingRequestId(req._id); setEditedAmount(req.amount); }} className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl text-xs font-bold transition-all">
+                                <Edit3 size={12} /> এডিট
+                              </button>
+                              <button onClick={() => handleApprove(req._id)} className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl text-xs font-bold shadow-sm shadow-emerald-600/10 transition-all">
+                                <Check size={12} /> অ্যাপ্রুভ
+                              </button>
+                            </div>
+                          )}
                         </div>
-                        <p className="text-xs text-slate-500 font-medium">
-                          মোবাইল: {req.donorPhone || req.receiverPhone || req.phone || "নেই"} | 
-                          ঠিকানা: {req.donorAddress || req.receiverAddress || req.address || "নেই"}
-                        </p>
-                        <p className="text-xs text-slate-400 mt-2 font-bold italic">নোট: {req.note || req.message || 'কোন বর্ণনা নেই'}</p>
-                      </div>
-                      <div className="flex items-center gap-4 w-full md:w-auto justify-end border-t md:border-0 pt-4 md:pt-0">
-                        <span className="text-xl font-black text-slate-800 mr-2">৳{Number(req.amount || 0).toLocaleString('bn-BD')}</span>
-                        <button onClick={() => handleReject(req._id)} className="p-3 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all" title="বাতিল করুন">
-                          <X size={18} />
-                        </button>
-                        <button onClick={() => handleApprove(req._id)} className="p-3 bg-emerald-50 text-emerald-500 hover:bg-emerald-500 hover:text-white rounded-xl transition-all" title="অনুমোদন করুন">
-                          <Check size={18} />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="p-20 text-center text-slate-300 font-bold italic uppercase tracking-widest text-xs">নতুন কোনো আবেদন নেই</div>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="bg-white p-6 md:p-10 rounded-[40px] shadow-2xl border border-slate-100 relative">
-            <h2 className={`text-2xl font-black mb-8 flex items-center gap-3 italic ${activeForm === 'donation' ? 'text-emerald-700' : 'text-red-700'}`}>
-              {activeForm === 'donation' ? <Gift /> : <ArrowDown />}
-              {activeForm === 'donation' ? 'নতুন দান রেকর্ড' : 'সহায়তা গ্রহীতার তথ্য'}
-            </h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {activeForm === 'donation' ? (
-                <>
-                  <div className="relative">
-                    <InputGroup label="দানদাতার নাম *" placeholder="নাম লিখুন" value={donation.donorName} onChange={(v) => { setDonation({...donation, donorName: v}); setShowSuggestions(true); }} />
-                    {showSuggestions && filteredDonors.length > 0 && (
-                      <div className="absolute z-[100] w-full mt-2 bg-white border border-slate-100 rounded-2xl shadow-2xl max-h-48 overflow-y-auto">
-                        {filteredDonors.map((name, index) => (
-                          <button key={index} type="button" onClick={() => { setDonation({...donation, donorName: name}); setShowSuggestions(false); }} className="w-full text-left px-5 py-3 hover:bg-emerald-50 flex items-center gap-3 transition-colors border-b last:border-0">
-                            <User size={14} className="text-emerald-500" />
-                            <span className="font-bold text-slate-700 text-xs">{name}</span>
-                          </button>
-                        ))}
-                      </div>
+                      ))
+                    ) : (
+                      <div className="py-12 text-center text-slate-300 font-bold italic text-xs">কোনো পেন্ডিং আবেদন নেই</div>
                     )}
                   </div>
-                  <InputGroup label="দানদাতার মোবাইল নম্বর" placeholder="01XXXXXXXXX" value={donation.donorPhone} onChange={(v)=>setDonation({...donation, donorPhone:v})} />
-                  <InputGroup label="দানদাতার ঠিকানা" placeholder="ঠিকানা লিখুন" value={donation.donorAddress} onChange={(v)=>setDonation({...donation, donorAddress:v})} />
-                  <InputGroup label="সংগ্রাহকের নাম *" placeholder="সংগ্রাহক" value={donation.receiverName} onChange={(v)=>setDonation({...donation, receiverName:v})} />
-                  <InputGroup label="টাকার পরিমাণ *" type="number" placeholder="0.00" value={donation.amount} onChange={(v)=>setDonation({...donation, amount:v})} isAmount color="emerald" />
-                  <InputGroup label="নোট" placeholder="..." value={donation.note} onChange={(v)=>setDonation({...donation, note:v})} />
-                </>
-              ) : (
-                <>
-                  <InputGroup label="গ্রহীতার নাম *" placeholder="সাহায্য প্রাপক" value={expense.receiverName} onChange={(v)=>setExpense({...expense, receiverName:v})} />
-                  <InputGroup label="পরিমাণ *" type="number" placeholder="0.00" value={expense.amount} onChange={(v)=>setExpense({...expense, amount:v})} isAmount color="red" />
-                  <InputGroup label="খরচের উদ্দেশ্য" placeholder="..." value={expense.note} onChange={(v)=>setExpense({...expense, note:v})} />
-                </>
+                </div>
               )}
-            </div>
 
-            <button 
-              onClick={handleSubmitData} 
-              disabled={isSubmitting} 
-              className={`w-full mt-10 p-5 rounded-[20px] font-black text-white text-lg flex justify-center items-center gap-3 transition-all active:scale-95 ${activeForm === 'donation' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'}`}
-            >
-              {isSubmitting ? <Loader2 className="animate-spin" /> : 'তথ্য সেভ করুন'}
-            </button>
-          </div>
-        )}
-
-        {/* Data List (Approved History) */}
-        <div className="mt-16 mb-24">
-          <div className="bg-white rounded-[40px] shadow-xl border border-slate-100 overflow-hidden">
-            <div className="p-8 border-b bg-slate-50/50 flex justify-between items-center">
-               <h3 className="font-black text-slate-800 italic uppercase text-xs tracking-widest underline underline-offset-4 decoration-emerald-500">অনুমোদিত ডাটা হিস্ট্রি</h3>
-               <span className="bg-white px-4 py-1 rounded-full border text-xs font-black text-slate-400">{listData.length} মোট এন্ট্রি</span>
-            </div>
-            <div className="divide-y divide-slate-50">
-              {listData.map((t) => (
-                <div key={t._id} className="p-6 flex items-center justify-between hover:bg-slate-50 transition-all group">
-                  <div className="flex items-center gap-5">
-                    <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-lg bg-emerald-500">৳</div>
-                    <div>
-                      <p className="font-black text-slate-800 italic capitalize">{t.donorName || t.receiverName || t.name}</p>
-                      <p className="text-xs text-slate-400 font-bold">{new Date(t.date).toLocaleDateString('bn-BD')} • {t.note || 'কোন বর্ণনা নেই'}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <span className={`text-xl font-black italic ${t.type === 'donation' ? 'text-emerald-600' : 'text-red-600'}`}>৳ {Number(t.amount).toLocaleString('bn-BD')}</span>
-                    <button onClick={() => setDeleteModal({ show: true, id: t._id })} className="w-10 h-10 flex items-center justify-center rounded-xl bg-red-50 text-red-400 hover:bg-red-500 hover:text-white transition-all"><Trash2 size={18}/></button>
+              {/* ২. বাতিল (Rejected) আবেদন তালিকা */}
+              {activeForm === 'rejected' && (
+                <div>
+                  <h2 className="text-xl font-black mb-6 flex items-center gap-3 text-rose-700">
+                    <EyeOff size={20} /> বাতিলকৃত আবেদনসমূহ ({rejectedRequests.length}টি)
+                  </h2>
+                  <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
+                    {rejectedRequests.length > 0 ? (
+                      rejectedRequests.map((req) => (
+                        <div key={req._id} className="bg-rose-50/40 border border-rose-100/70 p-3.5 rounded-2xl flex justify-between items-center gap-2">
+                          <div className="min-w-0">
+                            <p className="font-bold text-slate-700 truncate text-sm">{req.name || req.donorName || "নামহীন"}</p>
+                            <p className="text-[11px] text-slate-400 font-medium truncate mt-0.5">{req.note || 'কোনো বিবরণ নেই'}</p>
+                          </div>
+                          <span className="text-xs font-black text-rose-600 bg-rose-100/60 px-2.5 py-1 rounded-lg shrink-0">
+                            ৳{Number(req.amount || 0).toLocaleString('bn-BD')}
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="py-12 text-center text-slate-300 font-bold italic text-xs">বাতিল তালিকায় কোনো রেকর্ড নেই</div>
+                    )}
                   </div>
                 </div>
-              ))}
+              )}
+
+              {/* ৩. সাধারণ ডোনেশন ও এক্সপেন্স ফর্ম */}
+              {(activeForm === 'donation' || activeForm === 'expense') && (
+                <form onSubmit={handleSubmitData} className="space-y-5" onClick={(e) => e.stopPropagation()}>
+                  <h2 className={`text-xl font-black mb-4 flex items-center gap-3 ${activeForm === 'donation' ? 'text-emerald-700' : 'text-red-700'}`}>
+                    {activeForm === 'donation' ? <Gift /> : <ArrowDown />}
+                    {activeForm === 'donation' ? 'নতুন দান রেকর্ড' : 'সহায়তা গ্রহীতার তথ্য'}
+                  </h2>
+
+                  {activeForm === 'donation' ? (
+                    <>
+                      <div className="relative">
+                        <User className="absolute left-4 top-4 text-emerald-400" size={18}/>
+                        <input 
+                          placeholder="দাতার নাম *" 
+                          value={donation.donorName} 
+                          onFocus={() => setShowSuggestions(true)}
+                          onChange={(e) => { setDonation({...donation, donorName: e.target.value}); setShowSuggestions(true); }} 
+                          className="w-full pl-12 p-4 bg-emerald-50/30 border border-emerald-100 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium" 
+                        />
+                        {showSuggestions && filteredDonors.length > 0 && (
+                          <div className="absolute z-[110] w-full mt-2 bg-white border border-slate-100 rounded-2xl shadow-2xl max-h-48 overflow-y-auto">
+                            {filteredDonors.map((name, index) => (
+                              <button key={index} type="button" onClick={() => { setDonation({...donation, donorName: name}); setShowSuggestions(false); }} className="w-full text-left px-5 py-3 hover:bg-emerald-50 flex items-center gap-3 transition-colors border-b last:border-0">
+                                <Search size={14} className="text-emerald-400" />
+                                <span className="font-bold text-slate-700">{name}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <input placeholder="ফোন নম্বর" value={donation.donorPhone} onChange={(e)=>setDonation({...donation, donorPhone:e.target.value})} className="p-4 bg-emerald-50/30 border border-emerald-100 rounded-2xl outline-none focus:border-emerald-500 transition-all" />
+                        <input placeholder="টাকার পরিমাণ *" type="number" value={donation.amount} onChange={(e)=>setDonation({...donation, amount:e.target.value})} className="p-4 bg-emerald-50/50 border-2 border-emerald-200 rounded-2xl outline-none focus:border-emerald-600 font-black text-emerald-800 text-lg transition-all" />
+                      </div>
+                      <textarea placeholder="নোট/মন্তব্য (ঐচ্ছিক)" value={donation.note} onChange={(e)=>setDonation({...donation, note:e.target.value})} className="w-full p-4 bg-emerald-50/30 border border-emerald-100 rounded-2xl h-24 outline-none focus:border-emerald-500 transition-all" />
+                    </>
+                  ) : (
+                    <>
+                      <input placeholder="গ্রহীতার নাম/খাত *" value={expense.receiverName} onChange={(e)=>setExpense({...expense, receiverName:e.target.value})} className="w-full p-4 bg-rose-50/30 border border-rose-100 rounded-2xl outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all" />
+                      <input placeholder="টাকার পরিমাণ *" type="number" value={expense.amount} onChange={(e)=>setExpense({...expense, amount:e.target.value})} className="w-full p-4 bg-rose-50/50 border-2 border-rose-200 rounded-2xl outline-none focus:border-rose-600 font-black text-rose-800 text-lg transition-all" />
+                      <textarea placeholder="খরচের উদ্দেশ্য/নোট" value={expense.note} onChange={(e)=>setExpense({...expense, note:e.target.value})} className="w-full p-4 bg-rose-50/30 border border-rose-100 rounded-2xl h-24 outline-none focus:border-rose-500 transition-all" />
+                    </>
+                  )}
+
+                  <button type="submit" disabled={isSubmitting} className={`w-full mt-4 p-5 rounded-2xl font-black text-white text-lg flex justify-center items-center gap-3 shadow-lg transition-all active:scale-95 ${activeForm === 'donation' ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200' : 'bg-red-600 hover:bg-red-700 shadow-red-200'}`}>
+                    {isSubmitting ? <Loader2 className="animate-spin" /> : 'তথ্য সেভ করুন'}
+                  </button>
+                </form>
+              )}
             </div>
           </div>
+
+          {/* Right Column: History Section */}
+          <div className="lg:col-span-7">
+            <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden">
+              <div className="p-6 border-b flex justify-between items-center bg-slate-50/50">
+                <h3 className="font-bold text-slate-700 flex items-center gap-2">
+                  <Calculator size={18}/> অনুমোদিত ডাটা হিস্ট্রি
+                </h3>
+                <span className="text-xs bg-white px-3 py-1 rounded-full border border-slate-200 text-slate-500 font-semibold">
+                  {listData.length} টি রেকর্ড
+                </span>
+              </div>
+              <div className="divide-y divide-slate-50 max-h-[600px] overflow-y-auto">
+                {listData.length === 0 ? (
+                  <div className="p-20 text-center text-slate-400 font-medium">কোনো লেনদেন পাওয়া যায়নি</div>
+                ) : (
+                  listData.map((t) => {
+                    const isDonation = t.type === 'donation';
+                    return (
+                      <div key={t._id} className="p-5 flex items-center justify-between hover:bg-slate-50 transition-all group">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black shadow-sm ${isDonation ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'}`}>
+                            {isDonation ? 'দান' : 'ব্যয়'}
+                          </div>
+                          <div>
+                            <p className="font-black text-slate-800 text-lg uppercase leading-tight">
+                              {isDonation ? t.donorName : t.receiverName}
+                            </p>
+                            <div className="flex items-center gap-2 text-xs text-slate-400 mt-1 font-medium">
+                              <span>{new Date(t.date || t.createdAt).toLocaleDateString('bn-BD')}</span>
+                              <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
+                              <span className="truncate max-w-[150px]">{t.note || (isDonation ? 'তহবিল এন্ট্রি' : 'সাহায্য বিতরণ')}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <span className={`text-lg font-black ${isDonation ? 'text-emerald-600' : 'text-red-600'}`}>
+                            {isDonation ? '+' : '-'} {Number(t.amount).toLocaleString('bn-BD')}
+                          </span>
+                          <button 
+                            onClick={() => { if(confirm('মুছে ফেলতে চান?')) { deleteTransaction(t._id, FUND_ID); loadAllData(); } }} 
+                            className="p-2 text-slate-300 hover:text-red-500 md:opacity-0 group-hover:opacity-100 transition-all bg-slate-100 md:bg-transparent rounded-lg"
+                          >
+                            <Trash2 size={18}/>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
-
-      {/* Delete Modal */}
-      {deleteModal.show && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[450] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[32px] p-8 max-w-sm w-full shadow-2xl text-center">
-            <h3 className="text-xl font-black mb-6 italic text-slate-800">ডাটাটি মুছে ফেলতে চান?</h3>
-            <div className="flex gap-3">
-              <button onClick={() => setDeleteModal({ show: false, id: null })} className="flex-1 py-4 bg-slate-100 rounded-2xl font-bold text-xs text-slate-500">না</button>
-              <button onClick={async () => {
-                if (deleteModal.id) {
-                  await deleteTransaction(deleteModal.id, FUND_ID);
-                  await loadAllData();
-                }
-                setDeleteModal({ show: false, id: null });
-                notify("ডাটা মুছে ফেলা হয়েছে");
-              }} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-bold text-xs hover:bg-red-700 transition-all">হ্যাঁ, মুছুন</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Notification */}
-      {notification.show && (
-        <div className={`fixed top-5 right-5 z-[500] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl ${notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>
-          {notification.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
-          <span className="font-bold text-sm">{notification.message}</span>
-        </div>
-      )}
     </div>
   );
 }
 
 function StatCard({ title, amount, icon, color }) {
-    const colors = { emerald: 'text-emerald-600 bg-emerald-50', red: 'text-red-600 bg-red-50', indigo: 'text-indigo-600 bg-indigo-50' };
-    return (
-      <div className="p-6 rounded-[30px] border bg-white shadow-sm hover:shadow-xl transition-all group">
-        <div className="flex items-center gap-4">
-          <div className={`p-4 rounded-2xl transition-all group-hover:scale-110 ${colors[color]}`}>{icon}</div>
-          <div>
-            <p className="text-slate-400 text-xs font-black uppercase tracking-widest">{title}</p>
-            <p className="text-2xl font-black italic text-slate-800">৳ {Number(amount).toLocaleString('bn-BD')}</p>
-          </div>
+  const colors = {
+    emerald: 'text-emerald-600 bg-emerald-100',
+    red: 'text-red-600 bg-red-100',
+    indigo: 'text-indigo-600 bg-indigo-100'
+  };
+  return (
+    <div className="p-6 rounded-[2rem] border border-slate-100 bg-white shadow-sm hover:shadow-md transition-all duration-300">
+      <div className="flex items-center gap-4">
+        <div className={`p-4 rounded-2xl transition-transform duration-300 ${colors[color]}`}>{icon}</div>
+        <div>
+          <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">{title}</p>
+          <p className={`text-2xl font-black ${color === 'red' ? 'text-red-600' : 'text-slate-800'}`}>৳ {Number(amount || 0).toLocaleString('bn-BD')}</p>
         </div>
       </div>
-    );
-}
-
-function InputGroup({ label, placeholder, type = "text", value, onChange, isAmount, color = "emerald" }) {
-    return (
-      <div className="flex flex-col">
-        <label className="block text-xs font-black text-slate-400 mb-2 uppercase tracking-widest ml-1">{label}</label>
-        <input 
-            type={type} 
-            placeholder={placeholder} 
-            value={value} 
-            onChange={(e) => onChange(e.target.value)} 
-            className={`p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-opacity-10 transition-all ${color === 'red' ? 'focus:ring-red-500 focus:border-red-500' : 'focus:ring-emerald-500 focus:border-emerald-500'} ${isAmount ? 'font-black text-2xl italic' : 'font-medium'}`} 
-        />
-      </div>
-    );   
+    </div>
+  );
 }
