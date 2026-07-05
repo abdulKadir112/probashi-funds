@@ -33,7 +33,7 @@ export default function DonationFormModal({ isOpen, onClose }) {
       tempErrors.nid = 'এনআইডি ১০ অথবা ১৭ ডিজিটের হতে হবে';
     }
     if (Number(formData.amount) <= 0) {
-      tempErrors.amount = 'টাকার পরিমাণ সঠিক নয়';
+      tempErrors.amount = 'টাকার পরিমাণ সঠিক নয়';
     }
     setErrors(tempErrors);
     return Object.keys(tempErrors).length === 0;
@@ -46,6 +46,7 @@ export default function DonationFormModal({ isOpen, onClose }) {
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
+    // ব্যাকআপ ট্র্যাকিং বা ইউনিক নোটের জন্য লোকাল আইডি জেনারেট করা হচ্ছে
     const generatedId = 'ASAHAY-' + Math.floor(100000 + Math.random() * 900000);
     const fullAddress = `জেলা: ${formData.district}, উপজেলা: ${formData.upazila}, ইউনিয়ন: ${formData.union}, গ্রাম: ${formData.village}`;
     
@@ -62,8 +63,8 @@ export default function DonationFormModal({ isOpen, onClose }) {
       receiverAddress: fullAddress,
       amount: Number(formData.amount),
       note: `আবেদন ID: ${generatedId} | NID: ${formData.nid} | DOB: ${formData.dob} | লিঙ্গ: ${formData.gender} | ধর্ম: ${formData.religion} | কারণ: ${formData.reason}`,
-      status: "pending",
-      type: "expense",           // ← এটি পরিবর্তন করা হয়েছে (সবচেয়ে গুরুত্বপূর্ণ)
+      status: "pending", // ড্যাশবোর্ডের পেন্ডিং লিস্টে ডেটা পুশ করার মূল ফিল্টার
+      type: "expense",   // ফান্ড আউটফ্লো/এক্সপেন্স ট্র্যাকিং এর জন্য নির্ধারিত টাইপ
       date: new Date().toISOString()
     };
 
@@ -75,19 +76,22 @@ export default function DonationFormModal({ isOpen, onClose }) {
       });
 
       if (response.ok) {
-        setApplicationId(generatedId);
+        const resData = await response.json().catch(() => ({}));
+        // ব্যাকঅ্যান্ড জেনারেটেড আইডি রিসিটে দেখানোর অগ্রাধিকার, না থাকলে লোকাল আইডি ব্যবহার হবে
+        setApplicationId(resData.id || resData._id || generatedId);
         setStep('receipt');
         
+        // গ্লোবাল স্টেট মেথড কল যা আপনার ড্যাশবোর্ডের পেন্ডিং রিকোয়েস্টের তালিকা রিফ্রেশ করবে
         if (typeof fetchPendingRequests === 'function') {
-          setTimeout(() => fetchPendingRequests(FUND_ID), 800);
+          setTimeout(() => fetchPendingRequests(FUND_ID), 1000);
         }
       } else {
         const errData = await response.json().catch(() => ({}));
-        alert(errData.error || 'আবেদন জমা দিতে সমস্যা হয়েছে');
+        alert(errData.error || 'আবেদন জমা দিতে সমস্যা হয়েছে');
       }
     } catch (error) {
       console.error("Submission Error:", error);
-      alert('সার্ভারে সংযোগ সমস্যা হয়েছে।');
+      alert('সার্ভারে সংযোগ সমস্যা হয়েছে।');
     } finally {
       setIsSubmitting(false);
     }
@@ -281,7 +285,7 @@ export default function DonationFormModal({ isOpen, onClose }) {
                   </div>
                 </div>
                 <h2 className="title">অসহায় সাহায্য তহবিল</h2>
-                <div className="badge">আবেদন সফলভাবে জমা হয়েছে</div>
+                <div className="badge">আবেদন সফলভাবে জমা হয়েছে</div>
               </div>
 
               <table style={{width:'100%'}}>

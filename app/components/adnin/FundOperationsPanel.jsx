@@ -14,7 +14,6 @@ export default function FundOperationsPanel({
   addTransaction,
   approveRequest,
   rejectRequest,
-  loadAllData,
   notify
 }) {
   const [activeForm, setActiveForm] = useState('donation');
@@ -22,8 +21,8 @@ export default function FundOperationsPanel({
   const [isLoading, setIsLoading] = useState(false);
 
   const [localPendingRequests, setLocalPendingRequests] = useState([]);
-  const [rejectedRequests, setRejectedRequests] = useState([]);
   const [approvedRequests, setApprovedRequests] = useState([]);
+  const [rejectedRequests, setRejectedRequests] = useState([]);
 
   const [editingRequestId, setEditingRequestId] = useState(null);
   const [editedAmount, setEditedAmount] = useState('');
@@ -39,17 +38,18 @@ export default function FundOperationsPanel({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [allDonors, setAllDonors] = useState([]);
 
-  // ================== Fetch Data from API (Force Refresh) ==================
+  // ================== Fetch Data ==================
   const fetchPendingData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`${BACKEND_URL}/api/applications`, { 
-        cache: 'no-store', 
-        headers: { 'Cache-Control': 'no-cache' } 
+      const res = await fetch(`${BACKEND_URL}/api/applications`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' }
       });
-      
+
       if (res.ok) {
         const data = await res.json();
+        console.log("📥 Raw API Response:", data);
         processAndSetRequests(data);
       } else {
         processAndSetRequests(pendingRequests);
@@ -63,23 +63,26 @@ export default function FundOperationsPanel({
     }
   }, [BACKEND_URL, pendingRequests, notify]);
 
-  // Process Requests - Pending First
+  // ================== Process Requests ==================
   const processAndSetRequests = (dataArray) => {
     if (!Array.isArray(dataArray) || dataArray.length === 0) {
       setLocalPendingRequests([]);
-      setRejectedRequests([]);
       setApprovedRequests([]);
+      setRejectedRequests([]);
       return;
     }
 
-    const normalized = dataArray.map(item => ({
-      ...item,
-      status: (item.status || item.Status || 'pending').toString().toLowerCase().trim(),
-    }));
+    const normalized = dataArray.map(item => {
+      let status = (item.status || item.Status || item.state || '').toString().toLowerCase().trim();
+      if (!status || status === 'approved') status = 'pending'; // Force initial pending
+      return { ...item, status };
+    });
 
-    setLocalPendingRequests(normalized.filter(item => item.status === 'pending'));
-    setApprovedRequests(normalized.filter(item => item.status === 'approved'));
-    setRejectedRequests(normalized.filter(item => item.status === 'rejected'));
+    console.log("✅ Normalized Data:", normalized);
+
+    setLocalPendingRequests(normalized.filter(r => r.status === 'pending'));
+    setApprovedRequests(normalized.filter(r => r.status === 'approved'));
+    setRejectedRequests(normalized.filter(r => r.status === 'rejected'));
   };
 
   // Initial Load
@@ -87,7 +90,7 @@ export default function FundOperationsPanel({
     fetchPendingData();
   }, [fetchPendingData]);
 
-  // Sync with store prop
+  // Sync with props
   useEffect(() => {
     if (pendingRequests?.length > 0) {
       processAndSetRequests(pendingRequests);
@@ -126,7 +129,7 @@ export default function FundOperationsPanel({
       if (success) {
         setDonation({ donorName: '', donorPhone: '', donorAddress: '', amount: '', note: '' });
         notify("দান সফলভাবে সেভ হয়েছে!");
-        await fetchPendingData();   // Force Refresh Pending List
+        await fetchPendingData();
       }
     } else if (activeForm === 'expense') {
       if (!expense.receiverName || !expense.amount) {
@@ -148,29 +151,49 @@ export default function FundOperationsPanel({
   };
 
   const handleApprove = async (id) => {
+    const finalAmount = editingRequestId === id ? editedAmount : undefined;
     let success = false;
+
+    // Optimistic Update
+    setLocalPendingRequests(prev => prev.filter(req => (req._id || req.id) !== id));
+
     if (typeof approveRequest === 'function') {
-      success = await approveRequest(id, FUND_ID);
+      success = await approveRequest(id, FUND_ID, finalAmount);
     } else {
-      const res = await fetch(`${BACKEND_URL}/api/${FUND_ID}/pending/${id}/approve`, { method: 'POST' });
+      const res = await fetch(`${BACKEND_URL}/api/${FUND_ID}/pending/${id}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: finalAmount })
+      });
       success = res.ok;
     }
+
     if (success) {
       notify("আবেদন অনুমোদিত হয়েছে!");
+      setEditingRequestId(null);
       await fetchPendingData();
+    } else {
+      await fetchPendingData(); // Revert on failure
     }
   };
 
   const handleReject = async (id) => {
     let success = false;
+
+    // Optimistic Update
+    setLocalPendingRequests(prev => prev.filter(req => (req._id || req.id) !== id));
+
     if (typeof rejectRequest === 'function') {
       success = await rejectRequest(id, FUND_ID);
     } else {
       const res = await fetch(`${BACKEND_URL}/api/${FUND_ID}/pending/${id}/reject`, { method: 'POST' });
       success = res.ok;
     }
+
     if (success) {
       notify("আবেদন বাতিল হয়েছে", "error");
+      await fetchPendingData();
+    } else {
       await fetchPendingData();
     }
   };
@@ -189,7 +212,7 @@ export default function FundOperationsPanel({
       {/* Main Content */}
       <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-sm">
         {activeForm === 'pending' && (
-          <PendingRequestsPanel 
+          <PendingRequestsPanel
             requests={localPendingRequests}
             handleApprove={handleApprove}
             handleReject={handleReject}
@@ -265,11 +288,28 @@ function FormPanel({ activeForm, donation, setDonation, expense, setExpense, sho
         <>
           <div className="relative">
             <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
-            <input placeholder="দাতার নাম *" value={donation.donorName} onFocus={() => setShowSuggestions(true)} onChange={(e) => { setDonation({ ...donation, donorName: e.target.value }); setShowSuggestions(true); }} className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:border-emerald-500 transition-all" />
+            <input
+              placeholder="দাতার নাম *"
+              value={donation.donorName}
+              onFocus={() => setShowSuggestions(true)}
+              onChange={(e) => {
+                setDonation({ ...donation, donorName: e.target.value });
+                setShowSuggestions(true);
+              }}
+              className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:border-emerald-500 transition-all"
+            />
             {showSuggestions && filteredDonors.length > 0 && (
               <div className="absolute z-[110] w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-40 overflow-y-auto">
                 {filteredDonors.map((name, index) => (
-                  <button key={index} type="button" onClick={() => { setDonation({ ...donation, donorName: name }); setShowSuggestions(false); }} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2 border-b last:border-0 text-xs text-slate-700 font-medium">
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => {
+                      setDonation({ ...donation, donorName: name });
+                      setShowSuggestions(false);
+                    }}
+                    className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2 border-b last:border-0 text-xs text-slate-700 font-medium"
+                  >
                     <Search size={12} className="text-slate-400" />
                     <span>{name}</span>
                   </button>
@@ -315,16 +355,16 @@ function PendingRequestsPanel({ requests, handleApprove, handleReject, editingRe
             </div>
             <p className="text-[11px] bg-white p-2 rounded-lg text-slate-600 border border-slate-100 italic">"{req.note || 'বিবরণ নেই'}"</p>
 
-            {editingRequestId === req._id ? (
+            {editingRequestId === (req._id || req.id) ? (
               <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-emerald-500">
                 <input type="number" placeholder="পরিমাণ" value={editedAmount} onChange={(e) => setEditedAmount(e.target.value)} className="w-full px-2 py-1 text-xs font-bold bg-transparent outline-none" />
-                <button onClick={() => handleApprove(req._id)} className="p-1.5 bg-emerald-600 text-white rounded-md"><Check size={12}/></button>
+                <button onClick={() => handleApprove(req._id || req.id)} className="p-1.5 bg-emerald-600 text-white rounded-md"><Check size={12}/></button>
                 <button onClick={() => setEditingRequestId(null)} className="p-1.5 bg-slate-100 text-slate-500 rounded-md"><X size={12}/></button>
               </div>
             ) : (
               <div className="flex justify-end gap-1.5 pt-1.5 border-t border-dashed border-slate-200">
                 <button onClick={() => handleReject(req._id || req.id)} className="px-2 py-1 text-rose-600 hover:bg-rose-50 rounded-md text-[11px] font-bold transition-all">বাতিল</button>
-                <button onClick={() => { setEditingRequestId(req._id); setEditedAmount(req.amount); }} className="px-2 py-1 text-slate-600 hover:bg-slate-100 rounded-md text-[11px] font-bold transition-all">এডিট</button>
+                <button onClick={() => { setEditingRequestId(req._id || req.id); setEditedAmount(req.amount); }} className="px-2 py-1 text-slate-600 hover:bg-slate-100 rounded-md text-[11px] font-bold transition-all">এডিট</button>
                 <button onClick={() => handleApprove(req._id || req.id)} className="px-2.5 py-1 bg-slate-900 text-white hover:bg-slate-800 rounded-md text-[11px] font-bold transition-all shadow-sm">অনুমোদন</button>
               </div>
             )}
