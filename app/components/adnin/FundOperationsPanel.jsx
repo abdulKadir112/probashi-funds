@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Gift, ArrowDown, Inbox, CheckCircle2, EyeOff, PlusCircle, 
-  MinusCircle, Check, X, Loader2, User, Search 
+  MinusCircle, Check, X, Loader2, User, Search, Trash2 
 } from 'lucide-react';
 
 export default function FundOperationsPanel({
@@ -14,7 +14,8 @@ export default function FundOperationsPanel({
   addTransaction,
   approveRequest,
   rejectRequest,
-  notify
+  notify,
+  loadAllData
 }) {
   const [activeForm, setActiveForm] = useState('donation');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -42,47 +43,44 @@ export default function FundOperationsPanel({
   const fetchPendingData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`${BACKEND_URL}/api/applications`, {
-        cache: 'no-store',
-        headers: { 'Cache-Control': 'no-cache' }
+      // ফান্ড অনুসারে স্পেসিফিক ডাটা আনা (আরও নির্ভরযোগ্য)
+      const res = await fetch(`${BACKEND_URL}/api/${FUND_ID}/pending`, { 
+        cache: 'no-store' 
       });
-
+      
       if (res.ok) {
         const data = await res.json();
-        console.log("📥 Raw API Response:", data);
         processAndSetRequests(data);
       } else {
-        processAndSetRequests(pendingRequests);
+        // ফেলব্যাক
+        const fallbackRes = await fetch(`${BACKEND_URL}/api/applications`, { cache: 'no-store' });
+        if (fallbackRes.ok) {
+          const data = await fallbackRes.json();
+          processAndSetRequests(data);
+        }
       }
     } catch (err) {
       console.error("Fetch Error:", err);
       notify("ডাটা লোড করতে সমস্যা হয়েছে", "error");
-      processAndSetRequests(pendingRequests);
     } finally {
       setIsLoading(false);
     }
-  }, [BACKEND_URL, pendingRequests, notify]);
+  }, [BACKEND_URL, FUND_ID, notify]);
 
-  // ================== Process Requests ==================
   const processAndSetRequests = (dataArray) => {
-    if (!Array.isArray(dataArray) || dataArray.length === 0) {
-      setLocalPendingRequests([]);
-      setApprovedRequests([]);
-      setRejectedRequests([]);
-      return;
-    }
+    if (!Array.isArray(dataArray)) return;
 
-    const normalized = dataArray.map(item => {
-      let status = (item.status || item.Status || item.state || '').toString().toLowerCase().trim();
-      if (!status || status === 'approved') status = 'pending'; // Force initial pending
-      return { ...item, status };
-    });
+    const normalized = dataArray.map(item => ({
+      ...item,
+      status: (item.status || '').toString().toLowerCase().trim() || 'pending'
+    }));
 
-    console.log("✅ Normalized Data:", normalized);
+    // শুধু বর্তমান ফান্ডের ডাটা ফিল্টার
+    const fundFiltered = normalized.filter(r => r.fundId === FUND_ID);
 
-    setLocalPendingRequests(normalized.filter(r => r.status === 'pending'));
-    setApprovedRequests(normalized.filter(r => r.status === 'approved'));
-    setRejectedRequests(normalized.filter(r => r.status === 'rejected'));
+    setLocalPendingRequests(fundFiltered.filter(r => r.status === 'pending'));
+    setApprovedRequests(fundFiltered.filter(r => r.status === 'approved'));
+    setRejectedRequests(fundFiltered.filter(r => r.status === 'rejected'));
   };
 
   // Initial Load
@@ -90,7 +88,6 @@ export default function FundOperationsPanel({
     fetchPendingData();
   }, [fetchPendingData]);
 
-  // Sync with props
   useEffect(() => {
     if (pendingRequests?.length > 0) {
       processAndSetRequests(pendingRequests);
@@ -116,85 +113,102 @@ export default function FundOperationsPanel({
     if (e) e.preventDefault();
     setIsSubmitting(true);
 
-    if (activeForm === 'donation') {
-      if (!donation.donorName || !donation.amount) {
-        notify("দাতার নাম ও টাকার পরিমাণ দিন", "error");
-        setIsSubmitting(false);
-        return;
-      }
-      const success = await addTransaction({ 
-        ...donation, type: 'donation', fundId: FUND_ID, date: new Date().toISOString() 
-      }, FUND_ID);
+    const payload = activeForm === 'donation' ? {
+      ...donation, 
+      type: 'donation', 
+      fundId: FUND_ID 
+    } : {
+      ...expense, 
+      type: 'expense', 
+      fundId: FUND_ID 
+    };
 
-      if (success) {
+    const success = await addTransaction(payload, FUND_ID);
+
+    if (success) {
+      if (activeForm === 'donation') {
         setDonation({ donorName: '', donorPhone: '', donorAddress: '', amount: '', note: '' });
-        notify("দান সফলভাবে সেভ হয়েছে!");
-        await fetchPendingData();
-      }
-    } else if (activeForm === 'expense') {
-      if (!expense.receiverName || !expense.amount) {
-        notify("খরচের খাত ও পরিমাণ দিন", "error");
-        setIsSubmitting(false);
-        return;
-      }
-      const success = await addTransaction({ 
-        ...expense, type: 'expense', fundId: FUND_ID, date: new Date().toISOString() 
-      }, FUND_ID);
-
-      if (success) {
+        notify("দান সফলভাবে সেভ হয়েছে!", "success");
+      } else {
         setExpense({ receiverName: '', receiverPhone: '', receiverAddress: '', amount: '', note: '' });
-        notify("খরচ সেভ হয়েছে!");
-        await fetchPendingData();
+        notify("খরচ সেভ হয়েছে!", "success");
       }
+      await fetchPendingData();
+      if (loadAllData) await loadAllData();
+    } else {
+      notify("সেভ করতে সমস্যা হয়েছে", "error");
     }
     setIsSubmitting(false);
   };
 
   const handleApprove = async (id) => {
-    const finalAmount = editingRequestId === id ? editedAmount : undefined;
-    let success = false;
+    const finalAmount = editingRequestId === id ? Number(editedAmount) : undefined;
 
-    // Optimistic Update
-    setLocalPendingRequests(prev => prev.filter(req => (req._id || req.id) !== id));
-
-    if (typeof approveRequest === 'function') {
-      success = await approveRequest(id, FUND_ID, finalAmount);
-    } else {
+    try {
       const res = await fetch(`${BACKEND_URL}/api/${FUND_ID}/pending/${id}/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ amount: finalAmount })
       });
-      success = res.ok;
-    }
 
-    if (success) {
-      notify("আবেদন অনুমোদিত হয়েছে!");
-      setEditingRequestId(null);
-      await fetchPendingData();
-    } else {
-      await fetchPendingData(); // Revert on failure
+      if (res.ok) {
+        notify("আবেদন অনুমোদিত হয়েছে ✅", "success");
+        setEditingRequestId(null);
+        setEditedAmount('');
+        
+        // ডাবল রিফ্রেশ (সবচেয়ে গুরুত্বপূর্ণ)
+        await fetchPendingData();
+        if (loadAllData) await loadAllData();
+        
+        // অতিরিক্ত ছোট ডিলে দিয়ে আরেকবার রিফ্রেশ
+        setTimeout(() => fetchPendingData(), 800);
+      } else {
+        notify("অনুমোদন ব্যর্থ হয়েছে", "error");
+      }
+    } catch (err) {
+      console.error(err);
+      notify("সার্ভার সমস্যা হয়েছে", "error");
     }
   };
 
   const handleReject = async (id) => {
-    let success = false;
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/${FUND_ID}/pending/${id}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
 
-    // Optimistic Update
-    setLocalPendingRequests(prev => prev.filter(req => (req._id || req.id) !== id));
-
-    if (typeof rejectRequest === 'function') {
-      success = await rejectRequest(id, FUND_ID);
-    } else {
-      const res = await fetch(`${BACKEND_URL}/api/${FUND_ID}/pending/${id}/reject`, { method: 'POST' });
-      success = res.ok;
+      if (res.ok) {
+        notify("আবেদন বাতিল হয়েছে", "error");
+        await fetchPendingData();
+        if (loadAllData) await loadAllData();
+      } else {
+        notify("বাতিল করতে ব্যর্থ", "error");
+      }
+    } catch (err) {
+      console.error(err);
+      notify("সার্ভার সমস্যা হয়েছে", "error");
     }
+  };
 
-    if (success) {
-      notify("আবেদন বাতিল হয়েছে", "error");
-      await fetchPendingData();
-    } else {
-      await fetchPendingData();
+  const handleDeleteApproved = async (id) => {
+    if (!confirm('এই অনুমোদিত আবেদন মুছে ফেলতে চান?')) return;
+
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/${FUND_ID}/pending/${id}`, {
+        method: 'DELETE'
+      });
+
+      if (res.ok) {
+        notify("অনুমোদিত আবেদন মুছে ফেলা হয়েছে", "success");
+        await fetchPendingData();
+        if (loadAllData) await loadAllData();
+      } else {
+        notify("মুছতে ব্যর্থ হয়েছে", "error");
+      }
+    } catch (err) {
+      console.error(err);
+      notify("সার্ভার সমস্যা হয়েছে", "error");
     }
   };
 
@@ -205,8 +219,8 @@ export default function FundOperationsPanel({
         <MenuButton active={activeForm === 'donation'} onClick={() => setActiveForm('donation')} icon={<PlusCircle size={15} />} label="দান সংগ্রহ" color="emerald" />
         <MenuButton active={activeForm === 'expense'} onClick={() => setActiveForm('expense')} icon={<MinusCircle size={15} />} label="খরচ / বণ্টন" color="rose" />
         <MenuButton active={activeForm === 'pending'} onClick={() => { setActiveForm('pending'); fetchPendingData(); }} icon={<Inbox size={15} />} label="পেন্ডিং আবেদন" count={localPendingRequests.length} color="amber" />
-        <MenuButton active={activeForm === 'approved_req'} onClick={() => setActiveForm('approved_req')} icon={<CheckCircle2 size={15} />} label="অনুমোদিত আবেদন" count={approvedRequests.length} color="indigo" />
-        <MenuButton active={activeForm === 'rejected'} onClick={() => setActiveForm('rejected')} icon={<EyeOff size={15} />} label="বাতিলকৃত তালিকা" count={rejectedRequests.length} color="slate" />
+        <MenuButton active={activeForm === 'approved_req'} onClick={() => { setActiveForm('approved_req'); fetchPendingData(); }} icon={<CheckCircle2 size={15} />} label="অনুমোদিত আবেদন" count={approvedRequests.length} color="indigo" />
+        <MenuButton active={activeForm === 'rejected'} onClick={() => { setActiveForm('rejected'); fetchPendingData(); }} icon={<EyeOff size={15} />} label="বাতিলকৃত তালিকা" count={rejectedRequests.length} color="slate" />
       </div>
 
       {/* Main Content */}
@@ -224,7 +238,13 @@ export default function FundOperationsPanel({
           />
         )}
 
-        {activeForm === 'approved_req' && <ApprovedRequestsPanel requests={approvedRequests} />}
+        {activeForm === 'approved_req' && (
+          <ApprovedRequestsPanel 
+            requests={approvedRequests} 
+            handleDeleteApproved={handleDeleteApproved} 
+          />
+        )}
+
         {activeForm === 'rejected' && <RejectedRequestsPanel requests={rejectedRequests} />}
 
         {(activeForm === 'donation' || activeForm === 'expense') && (
@@ -246,6 +266,7 @@ export default function FundOperationsPanel({
   );
 }
 
+
 /* ====================== Sub Components ====================== */
 
 function MenuButton({ active, onClick, icon, label, count, color }) {
@@ -259,7 +280,6 @@ function MenuButton({ active, onClick, icon, label, count, color }) {
 
   return (
     <button
-      type="button"
       onClick={onClick}
       className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold border transition-all shrink-0 lg:w-full ${active ? activeStyles[color] : 'bg-transparent text-slate-600 border-transparent hover:bg-slate-50'}`}
     >
@@ -267,7 +287,7 @@ function MenuButton({ active, onClick, icon, label, count, color }) {
         {icon}
         <span>{label}</span>
       </div>
-      {count !== undefined && count !== null && (
+      {count !== undefined && (
         <span className={`ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold ${active ? 'bg-white/60' : 'bg-slate-100 text-slate-500'}`}>
           {count}
         </span>
@@ -278,7 +298,7 @@ function MenuButton({ active, onClick, icon, label, count, color }) {
 
 function FormPanel({ activeForm, donation, setDonation, expense, setExpense, showSuggestions, setShowSuggestions, filteredDonors, isSubmitting, handleSubmitData }) {
   return (
-    <form onSubmit={handleSubmitData} className="space-y-3.5" onClick={(e) => e.stopPropagation()}>
+    <form onSubmit={handleSubmitData} className="space-y-3.5">
       <h3 className={`text-xs sm:text-sm font-bold flex items-center gap-2 ${activeForm === 'donation' ? 'text-emerald-700' : 'text-rose-700'}`}>
         {activeForm === 'donation' ? <Gift size={16} /> : <ArrowDown size={16} />}
         {activeForm === 'donation' ? 'নতুন দান এন্ট্রি করুন' : 'নতুন খরচের হিসাব'}
@@ -296,6 +316,7 @@ function FormPanel({ activeForm, donation, setDonation, expense, setExpense, sho
                 setDonation({ ...donation, donorName: e.target.value });
                 setShowSuggestions(true);
               }}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
               className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:border-emerald-500 transition-all"
             />
             {showSuggestions && filteredDonors.length > 0 && (
@@ -329,7 +350,11 @@ function FormPanel({ activeForm, donation, setDonation, expense, setExpense, sho
         </>
       )}
 
-      <button type="submit" disabled={isSubmitting} className={`w-full py-2 rounded-xl font-semibold text-white text-xs sm:text-sm flex justify-center items-center gap-2 shadow-sm transition-all ${activeForm === 'donation' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'}`}>
+      <button 
+        type="submit" 
+        disabled={isSubmitting} 
+        className={`w-full py-2 rounded-xl font-semibold text-white text-xs sm:text-sm flex justify-center items-center gap-2 shadow-sm transition-all ${activeForm === 'donation' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'}`}
+      >
         {isSubmitting ? <Loader2 className="animate-spin" size={15} /> : 'ডাটা সেভ করুন'}
       </button>
     </form>
@@ -357,7 +382,13 @@ function PendingRequestsPanel({ requests, handleApprove, handleReject, editingRe
 
             {editingRequestId === (req._id || req.id) ? (
               <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-emerald-500">
-                <input type="number" placeholder="পরিমাণ" value={editedAmount} onChange={(e) => setEditedAmount(e.target.value)} className="w-full px-2 py-1 text-xs font-bold bg-transparent outline-none" />
+                <input 
+                  type="number" 
+                  placeholder="পরিমাণ" 
+                  value={editedAmount} 
+                  onChange={(e) => setEditedAmount(e.target.value)} 
+                  className="w-full px-2 py-1 text-xs font-bold bg-transparent outline-none" 
+                />
                 <button onClick={() => handleApprove(req._id || req.id)} className="p-1.5 bg-emerald-600 text-white rounded-md"><Check size={12}/></button>
                 <button onClick={() => setEditingRequestId(null)} className="p-1.5 bg-slate-100 text-slate-500 rounded-md"><X size={12}/></button>
               </div>
@@ -379,22 +410,57 @@ function PendingRequestsPanel({ requests, handleApprove, handleReject, editingRe
   );
 }
 
-function ApprovedRequestsPanel({ requests }) {
+/* ==================== আপডেটেড Approved Panel ==================== */
+function ApprovedRequestsPanel({ requests, handleDeleteApproved }) {
   return (
     <div className="space-y-3">
       <h3 className="text-xs sm:text-sm font-bold text-slate-800 flex items-center gap-2">
         <CheckCircle2 size={16} className="text-indigo-500" /> অনুমোদিত আবেদন ({requests.length})
       </h3>
       <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
-        {requests.length > 0 ? requests.map((req) => (
-          <div key={req._id || req.id} className="bg-indigo-50/40 border border-indigo-100 p-3 rounded-xl space-y-1">
-            <div className="flex justify-between items-center gap-2">
-              <p className="font-semibold text-slate-800 text-xs truncate">{req.receiverName || req.name || "নামহীন"}</p>
-              <span className="text-xs font-bold text-indigo-700 shrink-0">৳{Number(req.amount || 0).toLocaleString('bn-BD')}</span>
+        {requests.length > 0 ? requests.map((req) => {
+          const originalAmount = req.originalAmount || req.oldAmount || req.amountBeforeEdit;
+          const finalAmount = Number(req.amount || 0);
+          const isEdited = originalAmount && Number(originalAmount) !== finalAmount;
+
+          return (
+            <div key={req._id || req.id} className="bg-indigo-50/40 border border-indigo-100 p-3 rounded-xl flex justify-between items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-slate-800 text-xs truncate">
+                  {req.receiverName || req.name || "নামহীন"}
+                </p>
+                <p className="text-[10px] text-slate-500 truncate italic">
+                  "{req.note || 'কোনো বিবরণ নেই'}"
+                </p>
+              </div>
+
+              <div className="text-right shrink-0">
+                {/* Final (Edited) Amount */}
+                <span className="text-sm font-bold text-indigo-700 block">
+                  ৳{finalAmount.toLocaleString('bn-BD')}
+                </span>
+
+                {/* Original Amount if edited */}
+                {isEdited && (
+                  <span className="text-[10px] text-rose-600 line-through opacity-75 block mt-0.5">
+                    আগে: ৳{Number(originalAmount).toLocaleString('bn-BD')}
+                  </span>
+                )}
+
+                <button 
+                  onClick={() => handleDeleteApproved(req._id || req.id)}
+                  className="mt-2 text-rose-500 hover:text-rose-700 p-1 hover:bg-rose-50 rounded"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
             </div>
-            <p className="text-[10px] text-slate-500 truncate italic">"{req.note || 'কোনো বিবরণ নেই'}"</p>
+          );
+        }) : (
+          <div className="py-6 text-center text-slate-400 font-medium italic text-xs">
+            কোনো অনুমোদিত আবেদন নেই
           </div>
-        )) : <div className="py-6 text-center text-slate-400 font-medium italic text-xs">কোনো অনুমোদিত আবেদন নেই</div>}
+        )}
       </div>
     </div>
   );
@@ -415,7 +481,9 @@ function RejectedRequestsPanel({ requests }) {
             </div>
             <span className="text-xs font-bold text-rose-700 shrink-0">৳{Number(req.amount || 0).toLocaleString('bn-BD')}</span>
           </div>
-        )) : <div className="py-6 text-center text-slate-400 font-medium italic text-xs">কোনো বাতিল আবেদন নেই</div>}
+        )) : (
+          <div className="py-6 text-center text-slate-400 font-medium italic text-xs">কোনো বাতিল আবেদন নেই</div>
+        )}
       </div>
     </div>
   );

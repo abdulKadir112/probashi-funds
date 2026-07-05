@@ -129,7 +129,6 @@ export const useStore = create(
         return false;
       },
 
-      // আপডেট (Edit)
       updateTransaction: async (id, payload, fundId) => {
         const fundName = cleanFundName(fundId);
         try {
@@ -148,7 +147,6 @@ export const useStore = create(
         return false;
       },
 
-      // **আপডেটেড Delete Transaction**
       deleteTransaction: async (id, fundId) => {
         const fundName = cleanFundName(fundId);
         if (!id) return false;
@@ -172,13 +170,13 @@ export const useStore = create(
         }
       },
 
-      // Approve Request
-      approveRequest: async (id, fundId) => {
+      approveRequest: async (id, fundId, amount) => {
         const fundName = cleanFundName(fundId);
         try {
           const res = await fetch(`${getBaseUrl()}/api/${fundName}/pending/${id}/approve`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount })
           });
           if (res.ok) {
             await get().fetchData(fundName);
@@ -191,12 +189,12 @@ export const useStore = create(
         return false;
       },
 
-      // Reject Request
       rejectRequest: async (id, fundId) => {
         const fundName = cleanFundName(fundId);
         try {
-          const res = await fetch(`${getBaseUrl()}/api/${fundName}/pending/${id}`, {
-            method: 'DELETE',
+          const res = await fetch(`${getBaseUrl()}/api/${fundName}/pending/${id}/reject`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
           });
           if (res.ok) {
             await get().fetchPendingRequests(fundName);
