@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Gift, ArrowDown, Inbox, CheckCircle2, EyeOff, PlusCircle, 
-  MinusCircle, Check, X, Loader2, User, Search, Trash2 
+  MinusCircle, Loader2, User, Trash2 
 } from 'lucide-react';
 
 export default function FundOperationsPanel({
@@ -41,11 +41,9 @@ export default function FundOperationsPanel({
   const fetchPendingData = useCallback(async () => {
     setIsLoading(true);
     try {
-      let res = await fetch(`${BACKEND_URL}/api/${FUND_ID}/pending`, { cache: 'no-store' });
-
-      if (!res.ok) {
-        res = await fetch(`${BACKEND_URL}/api/applications`, { cache: 'no-store' });
-      }
+      const res = await fetch(`${BACKEND_URL}/api/applications`, { 
+        cache: 'no-store' 
+      });
 
       if (res.ok) {
         const data = await res.json();
@@ -59,29 +57,47 @@ export default function FundOperationsPanel({
     } finally {
       setIsLoading(false);
     }
-  }, [BACKEND_URL, FUND_ID, notify]);
+  }, [BACKEND_URL, notify]);
 
   const processAndSetRequests = (dataArray) => {
     if (!Array.isArray(dataArray)) {
       setLocalPendingRequests([]);
+      setApprovedRequests([]);
+      setRejectedRequests([]);
       return;
     }
 
     const normalized = dataArray.map(item => ({
       ...item,
+      _id: item._id || item.id,
       status: (item.status || 'pending').toString().toLowerCase().trim(),
-      fundId: item.fundId || item.FUND_ID || FUND_ID,
-      receiverName: item.receiverName || item.name || 'নামহীন'
+      fundId: item.fundId || item.FUND_ID || 'applications',
+      receiverName: item.receiverName || item.name || 'নামহীন',
+      receiverPhone: item.receiverPhone || item.phone || '',
+      createdAt: item.createdAt || item.date || new Date().toISOString()
     }));
 
-    // খুব নমনীয় ফিল্টার — FUND_ID না থাকলেও সব দেখাবে
-    const fundFiltered = normalized.filter(r => 
-      r.fundId === FUND_ID || r.fundId === 'asahay-sahajjo' || !r.fundId
-    );
+    const fundFiltered = normalized.filter(r => true); // সব দেখাবে
 
-    setLocalPendingRequests(fundFiltered.filter(r => r.status === 'pending'));
-    setApprovedRequests(fundFiltered.filter(r => r.status === 'approved'));
-    setRejectedRequests(fundFiltered.filter(r => r.status === 'rejected'));
+    const sortByDate = (a, b) => new Date(b.createdAt) - new Date(a.createdAt);
+
+    const pending = fundFiltered
+      .filter(r => r.status === 'pending')
+      .sort(sortByDate);
+
+    const approved = fundFiltered
+      .filter(r => r.status === 'approved')
+      .sort(sortByDate);
+
+    const rejected = fundFiltered
+      .filter(r => r.status === 'rejected')
+      .sort(sortByDate);
+
+    console.log("✅ Pending found:", pending.length);
+
+    setLocalPendingRequests(pending);
+    setApprovedRequests(approved);
+    setRejectedRequests(rejected);
   };
 
   // Load Data
@@ -109,7 +125,7 @@ export default function FundOperationsPanel({
     return allDonors.filter(name => name.toLowerCase().includes(searchTerm));
   }, [allDonors, donation.donorName]);
 
-  // Handlers
+  // ================== Handlers ==================
   const handleSubmitData = async (e) => {
     if (e) e.preventDefault();
     setIsSubmitting(true);
@@ -137,20 +153,45 @@ export default function FundOperationsPanel({
 
   const handleApprove = async (id) => {
     const finalAmount = editingRequestId === id ? Number(editedAmount) : undefined;
+    const request = localPendingRequests.find(r => r._id === id);
+
+    if (!request) {
+      notify("আবেদন খুঁজে পাওয়া যায়নি", "error");
+      return;
+    }
+
     try {
       const res = await fetch(`${BACKEND_URL}/api/${FUND_ID}/pending/${id}/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ amount: finalAmount })
       });
+
       if (res.ok) {
-        notify("আবেদন অনুমোদিত হয়েছে ✅", "success");
+        const expensePayload = {
+          receiverName: request.receiverName,
+          receiverPhone: request.receiverPhone,
+          receiverAddress: request.receiverAddress || '',
+          amount: finalAmount || request.amount,
+          note: request.note || `আবেদন অনুমোদিত - ID: ${id}`,
+          type: 'expense',
+          fundId: FUND_ID,
+          applicationId: id
+        };
+
+        await addTransaction(expensePayload, FUND_ID);
+
+        notify("আবেদন অনুমোদিত হয়েছে এবং খরচ হিসেবে যোগ হয়েছে ✅", "success");
         setEditingRequestId(null);
         setEditedAmount('');
         await fetchPendingData();
+        if (loadAllData) await loadAllData();
+      } else {
+        notify("অনুমোদন ব্যর্থ হয়েছে", "error");
       }
     } catch (err) {
-      notify("অনুমোদন ব্যর্থ", "error");
+      console.error(err);
+      notify("অনুমোদনের সময় সমস্যা হয়েছে", "error");
     }
   };
 
@@ -160,17 +201,22 @@ export default function FundOperationsPanel({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
+
       if (res.ok) {
         notify("আবেদন বাতিল হয়েছে", "error");
         await fetchPendingData();
+      } else {
+        notify("বাতিল করতে সমস্যা হয়েছে", "error");
       }
     } catch (err) {
-      notify("বাতিল করতে সমস্যা", "error");
+      console.error(err);
+      notify("বাতিলের সময় সমস্যা হয়েছে", "error");
     }
   };
 
   const handleDeleteApproved = async (id) => {
-    if (!confirm('মুছে ফেলতে চান?')) return;
+    if (!confirm('অনুমোদিত আবেদন মুছে ফেলতে চান?')) return;
+
     try {
       const res = await fetch(`${BACKEND_URL}/api/${FUND_ID}/pending/${id}`, { method: 'DELETE' });
       if (res.ok) {
@@ -178,7 +224,7 @@ export default function FundOperationsPanel({
         await fetchPendingData();
       }
     } catch (err) {
-      notify("মুছতে সমস্যা", "error");
+      notify("মুছতে সমস্যা হয়েছে", "error");
     }
   };
 
@@ -319,27 +365,32 @@ function PendingRequestsPanel({ requests, handleApprove, handleReject, editingRe
 
       <div className="space-y-3 max-h-[420px] overflow-y-auto">
         {requests.length > 0 ? requests.map((req) => (
-          <div key={req._id || req.id} className="bg-white border border-slate-200 p-4 rounded-2xl">
+          <div key={req._id} className="bg-white border border-slate-200 p-4 rounded-2xl">
             <div className="flex justify-between">
               <div>
-                <p className="font-semibold">{req.receiverName || req.name}</p>
-                <p className="text-sm text-slate-500">{req.receiverPhone || req.phone}</p>
+                <p className="font-semibold">{req.receiverName}</p>
+                <p className="text-sm text-slate-500">{req.receiverPhone}</p>
               </div>
               <p className="font-bold text-amber-600">৳{Number(req.amount).toLocaleString('bn-BD')}</p>
             </div>
-            <p className="text-xs mt-2 italic text-slate-600">"{req.note?.substring(0, 120)}..."</p>
+            <p className="text-xs mt-2 italic text-slate-600 line-clamp-2">"{req.note || ''}"</p>
 
-            {editingRequestId === (req._id || req.id) ? (
+            {editingRequestId === req._id ? (
               <div className="flex gap-2 mt-3">
-                <input type="number" value={editedAmount} onChange={(e) => setEditedAmount(e.target.value)} className="flex-1 border rounded px-3 py-1 text-sm" />
-                <button onClick={() => handleApprove(req._id || req.id)} className="bg-emerald-600 text-white px-4 rounded">✓</button>
+                <input 
+                  type="number" 
+                  value={editedAmount} 
+                  onChange={(e) => setEditedAmount(e.target.value)} 
+                  className="flex-1 border rounded px-3 py-1 text-sm" 
+                />
+                <button onClick={() => handleApprove(req._id)} className="bg-emerald-600 text-white px-4 rounded">✓</button>
                 <button onClick={() => setEditingRequestId(null)} className="bg-slate-200 px-4 rounded">✕</button>
               </div>
             ) : (
               <div className="flex gap-2 mt-3">
-                <button onClick={() => handleReject(req._id || req.id)} className="flex-1 py-2 text-rose-600 border border-rose-200 rounded-xl text-sm">বাতিল</button>
-                <button onClick={() => { setEditingRequestId(req._id || req.id); setEditedAmount(req.amount); }} className="flex-1 py-2 text-slate-600 border border-slate-200 rounded-xl text-sm">এডিট</button>
-                <button onClick={() => handleApprove(req._id || req.id)} className="flex-1 py-2 bg-emerald-600 text-white rounded-xl text-sm">অনুমোদন</button>
+                <button onClick={() => handleReject(req._id)} className="flex-1 py-2 text-rose-600 border border-rose-200 rounded-xl text-sm">বাতিল</button>
+                <button onClick={() => { setEditingRequestId(req._id); setEditedAmount(req.amount); }} className="flex-1 py-2 text-slate-600 border border-slate-200 rounded-xl text-sm">এডিট</button>
+                <button onClick={() => handleApprove(req._id)} className="flex-1 py-2 bg-emerald-600 text-white rounded-xl text-sm">অনুমোদন</button>
               </div>
             )}
           </div>
