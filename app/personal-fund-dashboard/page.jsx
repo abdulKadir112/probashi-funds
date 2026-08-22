@@ -1,17 +1,17 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useStore } from '../lib/store'; 
-import { 
-  PlusCircleIcon, 
-  ExclamationTriangleIcon, 
+import { useStore } from '../lib/store';
+import {
+  PlusCircleIcon,
+  ExclamationTriangleIcon,
   TrashIcon,
   CheckCircleIcon,
   ArrowLeftIcon,
   ClockIcon,
   CurrencyBangladeshiIcon,
   UserIcon,
-  LockClosedIcon 
+  LockClosedIcon
 } from '@heroicons/react/24/outline';
 import { useRouter } from 'next/navigation';
 
@@ -26,28 +26,55 @@ const ADMIN_PASSWORD = 'admin1234';
 export default function Dashboard() {
   const router = useRouter();
   const { addTransaction, deleteTransaction, transactions, fetchData, isLoading } = useStore();
-  
+
   const [isAdmin, setIsAdmin] = useState(false);
   const [passInput, setPassInput] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  
+
   const [formData, setFormData] = useState({
     donorName: '',
     amount: '',
     remark: '',
-    selectedMonth: new Date().getMonth()   // ডিফল্ট: বর্তমান মাস
+    selectedMonth: new Date().getMonth()
   });
 
   useEffect(() => {
     fetchData(FUND_ID);
   }, [fetchData]);
 
+  // মোট জমা, ইনভেস্ট ও ব্যালেন্স হিসাব
+  const { totalDonation, totalInvest, remainingBalance } = useMemo(() => {
+    let donation = 0;
+    let invest = 0;
+
+    transactions.forEach(tx => {
+      if (tx.type === 'donation') {
+        donation += Number(tx.amount) || 0;
+      } else if (tx.type === 'expense') {
+        invest += Number(tx.amount) || 0;
+      }
+    });
+
+    return {
+      totalDonation: donation,
+      totalInvest: invest,
+      remainingBalance: donation - invest
+    };
+  }, [transactions]);
+
   const uniqueMemberNames = useMemo(() => {
     const names = transactions
-      .filter(tx => tx.donorName)
+      .filter(tx => tx.donorName && tx.type === 'donation')
       .map(tx => tx.donorName.trim());
     return Array.from(new Set(names));
+  }, [transactions]);
+
+  // শুধু donation গুলো দেখাবো টেবিলে
+  const donationTransactions = useMemo(() => {
+    return transactions
+      .filter(tx => tx.type === 'donation')
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }, [transactions]);
 
   // পাসওয়ার্ড চেক
@@ -63,9 +90,9 @@ export default function Dashboard() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ 
-      ...prev, 
-      [name]: name === 'selectedMonth' ? Number(value) : value 
+    setFormData(prev => ({
+      ...prev,
+      [name]: name === 'selectedMonth' ? Number(value) : value
     }));
     setError('');
     setSuccess('');
@@ -78,14 +105,14 @@ export default function Dashboard() {
       return;
     }
 
-    // নির্বাচিত মাস অনুসারে তারিখ তৈরি করি (selectedYear = current year)
-    const selectedDate = new Date(currentYear, formData.selectedMonth, 10); // 10 তারিখ রাখলাম
+    const currentYear = new Date().getFullYear();
+    const selectedDate = new Date(currentYear, formData.selectedMonth, 10);
 
     const payload = {
       donorName: formData.donorName.trim(),
       amount: Number(formData.amount),
       remark: formData.remark.trim() || "নিয়মিত জমা",
-      createdAt: selectedDate.toISOString(),   // এখানেই মাস নির্ধারিত হয়
+      createdAt: selectedDate.toISOString(),
       type: 'donation'
     };
 
@@ -93,12 +120,14 @@ export default function Dashboard() {
       const res = await addTransaction(payload, FUND_ID);
       if (res) {
         setSuccess(`সফলভাবে ${ALL_MONTHS[formData.selectedMonth]} মাসে জমা করা হয়েছে!`);
-        setFormData({ 
-          donorName: '', 
-          amount: '', 
-          remark: '', 
-          selectedMonth: new Date().getMonth() 
+        setFormData({
+          donorName: '',
+          amount: '',
+          remark: '',
+          selectedMonth: new Date().getMonth()
         });
+      } else {
+        setError('যোগ করতে সমস্যা হয়েছে।');
       }
     } catch (err) {
       setError('যোগ করতে সমস্যা হয়েছে।');
@@ -116,8 +145,6 @@ export default function Dashboard() {
     }
   };
 
-  const currentYear = new Date().getFullYear();
-
   // লগইন না থাকলে
   if (!isAdmin) {
     return (
@@ -128,16 +155,16 @@ export default function Dashboard() {
           </div>
           <h2 className="text-2xl font-black text-slate-800 mb-2">অ্যাডমিন অ্যাক্সেস</h2>
           <p className="text-sm text-slate-400 mb-8 font-medium">ড্যাশবোর্ডে প্রবেশ করতে পাসওয়ার্ড দিন</p>
-          
+
           <form onSubmit={handleLogin} className="space-y-4">
-            <input 
-              type="password" 
-              placeholder="পাসওয়ার্ড লিখুন" 
+            <input
+              type="password"
+              placeholder="পাসওয়ার্ড লিখুন"
               value={passInput}
               onChange={(e) => setPassInput(e.target.value)}
               className="w-full bg-slate-50 border-none rounded-2xl p-4 text-center text-lg focus:ring-2 focus:ring-[#E94E2F]/20 outline-none transition-all"
             />
-            <button 
+            <button
               type="submit"
               className="w-full bg-[#E94E2F] text-white font-black py-4 rounded-2xl shadow-lg hover:bg-[#D14023] transition-all"
             >
@@ -154,25 +181,62 @@ export default function Dashboard() {
   // মেইন ড্যাশবোর্ড
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-12 font-sans text-slate-900">
+      {/* Header */}
       <div className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <button onClick={() => router.back()} className="flex items-center gap-2 text-slate-600 hover:text-[#E94E2F] font-bold px-3 py-2 rounded-xl hover:bg-orange-50 transition-all">
+          <button
+            onClick={() => router.back()}
+            className="flex items-center gap-2 text-slate-600 hover:text-[#E94E2F] font-bold px-3 py-2 rounded-xl hover:bg-orange-50 transition-all"
+          >
             <ArrowLeftIcon className="h-5 w-5" />
             <span>পিছনে যান</span>
           </button>
+
           <div className="text-center">
             <h2 className="text-lg font-black text-slate-800 tracking-tight">অ্যাডমিন ড্যাশবোর্ড</h2>
             <div className="flex items-center justify-center gap-1 text-[10px] text-green-500 font-bold uppercase tracking-widest italic">
               <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse"></span> Authorized Access
             </div>
           </div>
-          <button onClick={() => setIsAdmin(false)} className="text-[10px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-lg hover:bg-slate-50">Logout</button>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => router.push('/invest')}
+              className="text-[11px] font-black text-white bg-[#E94E2F] hover:bg-[#D14023] px-4 py-1.5 rounded-lg transition-all shadow-sm"
+            >
+              ইনভেস্ট পেজ
+            </button>
+
+            <button
+              onClick={() => setIsAdmin(false)}
+              className="text-[10px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-lg hover:bg-slate-50"
+            >
+              Logout
+            </button>
+          </div>
         </div>
       </div>
 
       <div className="container mx-auto p-4 md:p-8 max-w-6xl">
+
+        {/* ===== Summary Cards ===== */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <div className="bg-white p-5 rounded-3xl shadow-lg border border-slate-100">
+            <p className="text-xs font-bold text-slate-400 uppercase mb-1">মোট জমা</p>
+            <p className="text-2xl font-black text-slate-800">৳{totalDonation.toLocaleString()}</p>
+          </div>
+          <div className="bg-white p-5 rounded-3xl shadow-lg border border-slate-100">
+            <p className="text-xs font-bold text-slate-400 uppercase mb-1">মোট ইনভেস্ট</p>
+            <p className="text-2xl font-black text-red-500">৳{totalInvest.toLocaleString()}</p>
+          </div>
+          <div className="bg-gradient-to-r from-[#E94E2F] to-[#FF7E5F] p-5 rounded-3xl shadow-lg text-white">
+            <p className="text-xs font-bold opacity-90 uppercase mb-1">বর্তমান ব্যালেন্স</p>
+            <p className="text-2xl font-black">৳{remainingBalance.toLocaleString()}</p>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          
+
           {/* ফর্ম সেকশন */}
           <div className="lg:col-span-4">
             <div className="bg-white p-6 rounded-[2rem] shadow-xl shadow-slate-200/50 border border-white sticky top-24">
@@ -189,13 +253,13 @@ export default function Dashboard() {
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-black text-slate-400 uppercase ml-1 tracking-wider">সদস্যের নাম</label>
-                  <input 
-                    list="member-names" 
-                    name="donorName" 
-                    value={formData.donorName} 
-                    onChange={handleChange} 
-                    placeholder="সদস্যের নাম লিখুন" 
-                    className="w-full bg-slate-50 border-none rounded-2xl p-4 text-sm focus:ring-2 focus:ring-[#E94E2F]/20 outline-none text-slate-700 font-medium" 
+                  <input
+                    list="member-names"
+                    name="donorName"
+                    value={formData.donorName}
+                    onChange={handleChange}
+                    placeholder="সদস্যের নাম লিখুন"
+                    className="w-full bg-slate-50 border-none rounded-2xl p-4 text-sm focus:ring-2 focus:ring-[#E94E2F]/20 outline-none text-slate-700 font-medium"
                   />
                   <datalist id="member-names">
                     {uniqueMemberNames.map((name, index) => (
@@ -206,21 +270,21 @@ export default function Dashboard() {
 
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-black text-slate-400 uppercase ml-1 tracking-wider">জমার পরিমাণ</label>
-                  <input 
-                    type="number" 
-                    name="amount" 
-                    value={formData.amount} 
-                    onChange={handleChange} 
-                    placeholder="৳ ০.০০" 
-                    className="w-full bg-slate-50 border-none rounded-2xl p-4 text-sm focus:ring-2 focus:ring-[#E94E2F]/20 outline-none text-slate-700 font-bold" 
+                  <input
+                    type="number"
+                    name="amount"
+                    value={formData.amount}
+                    onChange={handleChange}
+                    placeholder="৳ ০.০০"
+                    className="w-full bg-slate-50 border-none rounded-2xl p-4 text-sm focus:ring-2 focus:ring-[#E94E2F]/20 outline-none text-slate-700 font-bold"
                   />
                 </div>
 
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-black text-slate-400 uppercase ml-1 tracking-wider">মাস সিলেক্ট করুন</label>
-                  <select 
-                    name="selectedMonth" 
-                    value={formData.selectedMonth} 
+                  <select
+                    name="selectedMonth"
+                    value={formData.selectedMonth}
                     onChange={handleChange}
                     className="w-full bg-slate-50 border-none rounded-2xl p-4 text-sm focus:ring-2 focus:ring-[#E94E2F]/20 outline-none text-slate-700 font-medium"
                   >
@@ -232,17 +296,25 @@ export default function Dashboard() {
                   </select>
                 </div>
 
-                <button 
-                  type="submit" 
-                  disabled={isLoading} 
+                <button
+                  type="submit"
+                  disabled={isLoading}
                   className="w-full bg-gradient-to-r from-[#E94E2F] to-[#FF7E5F] text-white font-black py-4 rounded-2xl shadow-lg hover:scale-[1.02] active:scale-95 disabled:opacity-50 transition-all"
                 >
                   {isLoading ? 'প্রসেসিং হচ্ছে...' : 'জমা নিশ্চিত করুন'}
                 </button>
               </form>
 
-              {error && <div className="mt-4 p-3 rounded-xl bg-red-50 text-red-600 text-[12px] font-bold flex items-center gap-2 border border-red-100"><ExclamationTriangleIcon className="h-4 w-4 shrink-0" /> {error}</div>}
-              {success && <div className="mt-4 p-3 rounded-xl bg-emerald-50 text-emerald-600 text-[12px] font-bold flex items-center gap-2 border border-emerald-100"><CheckCircleIcon className="h-4 w-4 shrink-0" /> {success}</div>}
+              {error && (
+                <div className="mt-4 p-3 rounded-xl bg-red-50 text-red-600 text-[12px] font-bold flex items-center gap-2 border border-red-100">
+                  <ExclamationTriangleIcon className="h-4 w-4 shrink-0" /> {error}
+                </div>
+              )}
+              {success && (
+                <div className="mt-4 p-3 rounded-xl bg-emerald-50 text-emerald-600 text-[12px] font-bold flex items-center gap-2 border border-emerald-100">
+                  <CheckCircleIcon className="h-4 w-4 shrink-0" /> {success}
+                </div>
+              )}
             </div>
           </div>
 
@@ -255,7 +327,7 @@ export default function Dashboard() {
                     <ClockIcon className="h-6 w-6" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-black text-slate-800">সাম্প্রতিক কার্যক্রম</h2>
+                    <h2 className="text-xl font-black text-slate-800">সাম্প্রতিক জমা</h2>
                     <p className="text-xs text-slate-400 font-medium">ভুল এন্ট্রি মুছতে ট্র্যাশ ব্যবহার করুন</p>
                   </div>
                 </div>
@@ -271,10 +343,14 @@ export default function Dashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {transactions.length === 0 ? (
-                      <tr><td colSpan="4" className="px-8 py-20 text-center text-slate-400 font-bold">কোনো তথ্য পাওয়া যায়নি</td></tr>
+                    {donationTransactions.length === 0 ? (
+                      <tr>
+                        <td colSpan="4" className="px-8 py-20 text-center text-slate-400 font-bold">
+                          কোনো তথ্য পাওয়া যায়নি
+                        </td>
+                      </tr>
                     ) : (
-                      transactions.slice().reverse().map((tx) => (
+                      donationTransactions.map((tx) => (
                         <tr key={tx._id} className="hover:bg-slate-50/50 transition-colors group">
                           <td className="px-8 py-5">
                             <p className="font-bold text-slate-700 text-sm">{tx.donorName}</p>
@@ -287,9 +363,14 @@ export default function Dashboard() {
                               {ALL_MONTHS[new Date(tx.createdAt).getMonth()]}
                             </span>
                           </td>
-                          <td className="px-4 py-5 text-right font-black text-slate-800 text-sm">৳{tx.amount.toLocaleString()}</td>
+                          <td className="px-4 py-5 text-right font-black text-slate-800 text-sm">
+                            ৳{tx.amount.toLocaleString()}
+                          </td>
                           <td className="px-8 py-5 text-right">
-                            <button onClick={() => handleDelete(tx._id)} className="p-2.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all">
+                            <button
+                              onClick={() => handleDelete(tx._id)}
+                              className="p-2.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                            >
                               <TrashIcon className="h-5 w-5" />
                             </button>
                           </td>

@@ -28,10 +28,10 @@ export const useStore = create(
       fetchAllData: async () => {
         set({ isLoading: true });
         try {
-          const requests = ALL_FUNDS.map(fund => 
-            fetch(`${getBaseUrl()}/api/${fund}`).then(res => res.ok ? res.json() : [])
+          const requests = ALL_FUNDS.map(fund =>
+            fetch(`${getBaseUrl()}/api/${fund}`).then(res => (res.ok ? res.json() : []))
           );
-          
+
           const results = await Promise.all(requests);
           const allTransactions = results.flat().filter(t => t && typeof t === 'object');
 
@@ -66,7 +66,7 @@ export const useStore = create(
             isLoading: false,
           });
         } catch (err) {
-          console.error("Fetch All Error:", err);
+          console.error('Fetch All Error:', err);
           set({ isLoading: false });
         }
       },
@@ -76,12 +76,16 @@ export const useStore = create(
         set({ isLoading: true });
         try {
           const res = await fetch(`${getBaseUrl()}/api/${fundName}`);
-          if (!res.ok) throw new Error("Failed to fetch");
+          if (!res.ok) throw new Error('Failed to fetch');
           const data = await res.json();
           const list = Array.isArray(data) ? data : [];
-          
-          const donation = list.filter(t => t.type === 'donation').reduce((s, t) => s + (Number(t.amount) || 0), 0);
-          const expense = list.filter(t => t.type === 'expense').reduce((s, t) => s + (Number(t.amount) || 0), 0);
+
+          const donation = list
+            .filter(t => t.type === 'donation')
+            .reduce((s, t) => s + (Number(t.amount) || 0), 0);
+          const expense = list
+            .filter(t => t.type === 'expense')
+            .reduce((s, t) => s + (Number(t.amount) || 0), 0);
 
           set({
             transactions: list,
@@ -91,7 +95,7 @@ export const useStore = create(
             isLoading: false,
           });
         } catch (err) {
-          console.error("Fetch Data Error:", err);
+          console.error('Fetch Data Error:', err);
           set({ isLoading: false, transactions: [] });
         }
       },
@@ -105,7 +109,7 @@ export const useStore = create(
             set({ pendingRequests: Array.isArray(data) ? data : [] });
           }
         } catch (err) {
-          console.error("Fetch Pending Error:", err);
+          console.error('Fetch Pending Error:', err);
           set({ pendingRequests: [] });
         }
       },
@@ -119,53 +123,74 @@ export const useStore = create(
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
           });
+
           if (res.ok) {
             await get().fetchData(fundName);
             return true;
+          } else {
+            const errText = await res.text();
+            console.error('Add failed:', res.status, errText);
+            return false;
           }
-        } catch (err) { 
-          console.error("Add Transaction Error:", err); 
+        } catch (err) {
+          console.error('Add Transaction Error:', err);
         }
         return false;
       },
 
+      // ===== UPDATE =====
       updateTransaction: async (id, payload, fundId) => {
         const fundName = cleanFundName(fundId);
+        if (!id) return false;
+
         try {
           const res = await fetch(`${getBaseUrl()}/api/${fundName}/${id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
           });
+
           if (res.ok) {
             await get().fetchData(fundName);
             return true;
+          } else {
+            const errText = await res.text();
+            console.error('Update failed:', res.status, errText);
+            return false;
           }
         } catch (err) {
-          console.error("Update Error:", err);
+          console.error('Update Error:', err);
         }
         return false;
       },
 
+      // ===== DELETE =====
       deleteTransaction: async (id, fundId) => {
         const fundName = cleanFundName(fundId);
         if (!id) return false;
 
         try {
-          const res = await fetch(`${getBaseUrl()}/api/${fundName}/pending/${id}`, {
-            method: 'DELETE'
+          // নতুন রুট আগে চেষ্টা
+          let res = await fetch(`${getBaseUrl()}/api/${fundName}/${id}`, {
+            method: 'DELETE',
           });
+
+          // না হলে পুরনো pending রুট
+          if (!res.ok) {
+            res = await fetch(`${getBaseUrl()}/api/${fundName}/pending/${id}`, {
+              method: 'DELETE',
+            });
+          }
 
           if (res.ok) {
             await get().fetchData(fundName);
-            await get().fetchPendingRequests(fundName);
             return true;
           } else {
-            console.error("Delete failed with status:", res.status);
+            console.error('Delete failed with status:', res.status);
             return false;
           }
         } catch (err) {
-          console.error("Delete Error:", err);
+          console.error('Delete Error:', err);
           return false;
         }
       },
@@ -176,7 +201,7 @@ export const useStore = create(
           const res = await fetch(`${getBaseUrl()}/api/${fundName}/pending/${id}/approve`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ amount })
+            body: JSON.stringify({ amount }),
           });
           if (res.ok) {
             await get().fetchData(fundName);
@@ -184,7 +209,7 @@ export const useStore = create(
             return true;
           }
         } catch (err) {
-          console.error("Approve Error:", err);
+          console.error('Approve Error:', err);
         }
         return false;
       },
@@ -194,17 +219,17 @@ export const useStore = create(
         try {
           const res = await fetch(`${getBaseUrl()}/api/${fundName}/pending/${id}/reject`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 'Content-Type': 'application/json' },
           });
           if (res.ok) {
             await get().fetchPendingRequests(fundName);
             return true;
           }
         } catch (err) {
-          console.error("Reject Error:", err);
+          console.error('Reject Error:', err);
         }
         return false;
-      }
+      },
     }),
 
     {

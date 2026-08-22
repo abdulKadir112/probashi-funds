@@ -7,39 +7,33 @@ import { bn } from 'date-fns/locale/bn';
 import Link from 'next/link';
 
 // React Icons
-import { FaArrowUp, FaArrowDown, FaGift, FaUsers, FaDonate, FaBook } from "react-icons/fa";
+import { FaArrowUp, FaArrowDown, FaGift, FaUsers, FaDonate, FaBook, FaHeart, FaShareAlt } from "react-icons/fa";
 import { FaPeopleGroup, FaArrowLeft } from "react-icons/fa6";
-import { MdHome, MdAccountCircle } from "react-icons/md";
+import { MdHome, MdAccountCircle, MdAdminPanelSettings } from "react-icons/md";
 import { BiSolidDonateHeart } from "react-icons/bi";
 
 export default function AsahayFundHome() {
   const { transactions, fetchData } = useStore();
-
   const currentFund = 'asahay-sahajjo';
 
   useEffect(() => {
-    fetchData(); // সব ডাটা নিয়ে আসা হচ্ছে
+    fetchData(); 
   }, [fetchData]);
 
-  // --- লজিক: শুধুমাত্র এই ফান্ডের ডাটা ফিল্টার ও ক্যালকুলেশন করা ---
+  // --- লজিক: ফান্ডের ডাটা ফিল্টার ও ক্যালকুলেশন ---
   const fundData = useMemo(() => {
-    // ১. এই ফান্ডের সব লেনদেন ফিল্টার
     const filteredTransactions = transactions.filter(t => t.fundId === currentFund);
 
-    // ২. মোট জমা (Donations)
     const totalDonation = filteredTransactions
       .filter(t => t.type === 'donation' || t.type === undefined)
       .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
-    // ৩. মোট খরচ (Expenses/Receivers)
     const totalExpense = filteredTransactions
       .filter(t => t.type === 'expense' || t.type === 'receiver')
       .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
-    // ৪. নিট ব্যালেন্স
     const netBalance = totalDonation - totalExpense;
 
-    // ৫. ইউনিক সদস্য সংখ্যা (যারা এই ফান্ডে দান করেছেন)
     const uniqueMembers = new Set(
       filteredTransactions
         .filter(t => t.type === 'donation' || t.type === undefined)
@@ -47,10 +41,13 @@ export default function AsahayFundHome() {
         .filter(name => name !== "")
     );
 
-    // ৬. সাম্প্রতিক ৫টি লেনদেন
     const recentTransactions = [...filteredTransactions]
       .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
       .slice(0, 5);
+
+    // লক্ষ্য নির্ধারণ (উদাহরণস্বরূপ ১,০০,০০০ টাকা লক্ষ্য ধরা হয়েছে)
+    const weeklyTarget = 100000; 
+    const progressPercent = Math.min(Math.round((totalDonation / weeklyTarget) * 105), 100);
 
     return {
       netBalance,
@@ -58,7 +55,9 @@ export default function AsahayFundHome() {
       totalExpense,
       transactionCount: filteredTransactions.length,
       memberCount: uniqueMembers.size,
-      recentTransactions
+      recentTransactions,
+      weeklyTarget,
+      progressPercent
     };
   }, [transactions, currentFund]);
 
@@ -72,83 +71,158 @@ export default function AsahayFundHome() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] pb-24 font-sans">
-      {/* Back Button */}
-      <div className="max-w-7xl mx-auto p-4 flex items-center gap-4">
-        <Link href="/">
-          <button className="p-2 bg-white border border-blue-100 rounded-xl text-blue-600 hover:bg-blue-50 transition shadow-sm">
-            <FaArrowLeft size={20} />
-          </button>
-        </Link>
-        <span className="font-bold text-slate-600">তহবিল তালিকা</span>
-      </div>
-
-      {/* Hero Section */}
-      <div className="max-w-7xl mx-auto p-4 md:p-10">
-        <div className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white rounded-[2.5rem] shadow-2xl shadow-blue-100 p-8 md:p-14 text-center mb-10 relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-10 opacity-10">
-            <BiSolidDonateHeart size={150} />
+    <div className="min-h-screen bg-slate-50 text-slate-800 pb-28 font-sans antialiased">
+      
+      {/* Top Glassmorphic Navigation Bar */}
+      <nav className="sticky top-0 bg-white/80 backdrop-blur-md border-b border-slate-100 z-40 shadow-sm transition-all">
+        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link href="/">
+              <button className="p-2.5 text-slate-600 hover:text-blue-600 hover:bg-slate-100 rounded-xl transition">
+                <FaArrowLeft size={18} />
+              </button>
+            </Link>
+            <span className="font-extrabold text-slate-800 text-base md:text-lg tracking-tight">অসহায় তহবিল</span>
           </div>
-          <p className="text-sm md:text-lg uppercase tracking-[0.2em] font-black opacity-90 mb-3 italic">অসহায় সাহায্য ২০২৬</p>
-          <h1 className="text-5xl md:text-8xl font-black italic drop-shadow-lg">
-            {fundData.netBalance.toLocaleString('bn-BD')} <span className="text-3xl md:text-5xl font-normal">৳</span>
-          </h1>
-          <p className="mt-4 text-blue-100 text-xs font-bold uppercase tracking-widest">বর্তমান ফান্ডের স্থিতি</p>
+          <button className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-600 hover:text-blue-600 bg-slate-100 hover:bg-blue-50 rounded-lg transition">
+            <FaShareAlt size={12} /> শেয়ার করুন
+          </button>
         </div>
+      </nav>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
-          <StatCard icon={<FaArrowUp />} title="মোট জমা" value={fundData.totalDonation} color="blue" />
-          <StatCard icon={<FaArrowDown />} title="মোট খরচ" value={fundData.totalExpense} color="red" />
-          <StatCard icon={<FaGift />} title="লেনদেন" value={fundData.transactionCount} color="purple" isCount={true} />
-          <StatCard icon={<FaUsers />} title="দাতা সদস্য" value={fundData.memberCount} color="emerald" isCount={true} />
-        </div>
-
-        {/* Recent Transactions Section */}
-        <div className="flex justify-between items-center mb-6 px-2">
-          <h2 className="text-xl md:text-2xl font-black text-slate-800 italic">সাম্প্রতিক লেনদেন</h2>
-          <Link href={`/funds/${currentFund}/asahay-doner?fund=${currentFund}`} className="text-blue-600 font-black text-[10px] bg-blue-50 px-4 py-2 rounded-full uppercase tracking-wider">সব দেখুন</Link>
-        </div>
-
-        <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
-          {fundData.recentTransactions.length === 0 ? (
-            <div className="p-20 text-center">
-              <p className="text-slate-300 text-lg italic font-medium">এই ফান্ডের কোনো লেনদেন নেই</p>
+      <div className="max-w-6xl mx-auto px-4 py-6 md:py-10 grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        {/* Main Content Area (Left side 2 columns on desktop) */}
+        <div className="lg:col-span-2 space-y-6">
+          
+          {/* Hero Premium Card */}
+          <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-950 to-blue-900 text-white rounded-3xl p-8 shadow-xl shadow-indigo-950/10">
+            <div className="absolute top-0 right-0 p-8 opacity-5 transform translate-x-4 -translate-y-4">
+              <BiSolidDonateHeart size={200} />
             </div>
-          ) : (
-            fundData.recentTransactions.map((t) => (
-              <div key={t._id} className="flex justify-between items-center p-5 md:p-6 border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
-                <div className="flex items-center gap-4">
-                  <div className={`p-3 md:p-4 rounded-2xl ${t.type === 'donation' || t.type === undefined ? 'bg-blue-50 text-blue-600' : 'bg-rose-50 text-rose-600'}`}>
-                    {t.type === 'donation' || t.type === undefined ? <FaArrowUp size={14} /> : <FaArrowDown size={14} />}
-                  </div>
-                  <div>
-                    <div className="font-black text-slate-800 text-sm md:text-lg leading-tight">
-                      {t.type === 'donation' || t.type === undefined ? (t.donorName || t.name) : (t.receiverName || t.name || 'সাহায্য প্রদান')}
-                    </div>
-                    <div className="text-[9px] text-slate-400 font-black uppercase tracking-widest mt-1">
-                      {t.date ? format(new Date(t.date), 'dd MMMM yyyy', { locale: bn }) : 'তারিখ নেই'}
-                    </div>
-                  </div>
+            
+            <div className="relative z-10">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold bg-white/10 text-blue-200 rounded-full border border-white/10 backdrop-blur-sm mb-4">
+                <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
+                চলতি ফান্ড স্থিতি
+              </span>
+              
+              <h1 className="text-4xl md:text-6xl font-black tracking-tight mb-2">
+                {fundData.netBalance.toLocaleString('bn-BD')} <span className="text-2xl md:text-3xl font-medium text-slate-300">৳</span>
+              </h1>
+              <p className="text-sm text-slate-400 font-medium">বর্তমানে মানুষের সেবায় ব্যয় করার জন্য প্রস্তুত আছে</p>
+              
+              {/* Progress Toward Fund Target */}
+              <div className="mt-6 pt-6 border-t border-white/10 space-y-2">
+                <div className="flex justify-between text-xs font-medium text-slate-300">
+                  <span>ফান্ডের লক্ষ্যমাত্রা: {fundData.weeklyTarget.toLocaleString('bn-BD')} ৳</span>
+                  <span className="text-blue-400 font-bold">{fundData.progressPercent.toLocaleString('bn-BD')}% অর্জিত</span>
                 </div>
-                <div className={`font-black text-base md:text-xl italic ${(t.type === 'donation' || t.type === undefined) ? 'text-blue-600' : 'text-rose-600'}`}>
-                  {(t.type === 'donation' || t.type === undefined) ? '+' : '-'} {Number(t.amount).toLocaleString('bn-BD')} ৳
+                <div className="w-full bg-white/10 h-2.5 rounded-full overflow-hidden">
+                  <div 
+                    className="bg-gradient-to-r from-blue-500 to-indigo-400 h-full rounded-full transition-all duration-1000 ease-out"
+                    style={{ width: `${fundData.progressPercent}%` }}
+                  ></div>
                 </div>
               </div>
-            ))
-          )}
+            </div>
+          </div>
+
+          {/* Stats Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <StatCard icon={<FaArrowUp />} title="মোট সংগ্রহ" value={fundData.totalDonation} color="blue" />
+            <StatCard icon={<FaArrowDown />} title="মোট বিতরণ" value={fundData.totalExpense} color="red" />
+            <StatCard icon={<FaGift />} title="মোট ট্রানজেকশন" value={fundData.transactionCount} color="purple" isCount={true} />
+            <StatCard icon={<FaUsers />} title="মোট দাতা" value={fundData.memberCount} color="emerald" isCount={true} />
+          </div>
+
+          {/* Recent Transactions List */}
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="flex justify-between items-center p-6 border-b border-slate-50">
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <span className="w-1.5 h-5 bg-blue-600 rounded-full"></span>
+                সাম্প্রতিক লেনদেন সমূহ
+              </h2>
+              <Link href={`/funds/${currentFund}/asahay-doner?fund=${currentFund}`} className="text-xs font-bold text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-xl transition">
+                সব দেখুন
+              </Link>
+            </div>
+
+            <div className="divide-y divide-slate-50">
+              {fundData.recentTransactions.length === 0 ? (
+                <div className="p-12 text-center text-slate-400">
+                  <BiSolidDonateHeart size={40} className="mx-auto text-slate-200 mb-3" />
+                  <p className="text-sm font-medium">এই ফান্ডে এখনও কোনো লেনদেন করা হয়নি।</p>
+                </div>
+              ) : (
+                fundData.recentTransactions.map((t) => (
+                  <div key={t._id} className="flex justify-between items-center p-5 hover:bg-slate-50/50 transition-colors">
+                    <div className="flex items-center gap-4">
+                      <div className={`p-3 rounded-2xl shrink-0 ${t.type === 'donation' || t.type === undefined ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+                        {t.type === 'donation' || t.type === undefined ? <FaArrowUp size={14} /> : <FaArrowDown size={14} />}
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-slate-800 text-sm md:text-base leading-snug">
+                          {t.type === 'donation' || t.type === undefined ? (t.donorName || t.name) : (t.receiverName || t.name || 'সাহায্য প্রদান')}
+                        </h4>
+                        <span className="text-[11px] text-slate-400 font-medium block mt-0.5">
+                          {t.date ? format(new Date(t.date), 'dd MMMM yyyy', { locale: bn }) : 'তারিখ পাওয়া যায়নি'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className={`font-bold text-sm md:text-base ${t.type === 'donation' || t.type === undefined ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {t.type === 'donation' || t.type === undefined ? '+' : '-'} {Number(t.amount).toLocaleString('bn-BD')} ৳
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
+
+        {/* Sidebar Widget Area (Right side 1 column on desktop) */}
+        <div className="space-y-6">
+          {/* Quick Donate Call-to-action Card */}
+          <div className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white rounded-3xl p-6 shadow-lg shadow-blue-600/10 space-y-4">
+            <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-xl text-white">
+              <FaHeart className="animate-pulse" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold">মানবতার কল্যাণে দাঁড়ান</h3>
+              <p className="text-xs text-blue-100 mt-1 leading-relaxed">আপনার সামান্যতম অবদান একটি অসহায় পরিবারের মুখে হাসি ফুটাতে পারে। আজই আপনার সাধ্যমত ফান্ডে শরিক হোন।</p>
+            </div>
+            <button className="w-full bg-white text-blue-700 font-bold py-3 px-4 rounded-xl text-sm shadow-md hover:bg-blue-50 transition active:scale-[0.98]">
+              সরাসরি ফান্ডে টাকা জমা দিন
+            </button>
+          </div>
+
+          {/* Quick Menu Links for Desktop */}
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-4 hidden md:block">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider px-3 mb-3">নেভিগেশন মেনু</h3>
+            <div className="grid grid-cols-1 gap-1">
+              {menuItems.map((item, i) => (
+                <Link key={i} href={item.link} className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-600 hover:text-blue-600 hover:bg-slate-50 transition font-medium text-sm group">
+                  <span className="text-lg text-slate-400 group-hover:text-blue-600 transition">
+                    {item.icon}
+                  </span>
+                  {item.name}
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+
       </div>
 
-      {/* Bottom Navigation for Mobile */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-slate-100 z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
-        <div className="grid grid-cols-6 h-20 px-1">
+      {/* Modern Floating Bottom Navigation for Mobile */}
+      <div className="md:hidden fixed bottom-4 left-4 right-4 bg-white/90 backdrop-blur-xl border border-slate-100 z-50 shadow-[0_10px_30px_rgba(0,0,0,0.08)] rounded-2xl overflow-hidden">
+        <div className="grid grid-cols-6 h-16 px-1">
           {menuItems.map((item, i) => (
-            <Link key={i} href={item.link} className="flex flex-col items-center justify-center gap-1 group">
-              <span className="text-xl text-slate-400 group-hover:text-blue-600 group-hover:scale-110 transition-all duration-300">
+            <Link key={i} href={item.link} className="flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-blue-600 transition duration-200">
+              <span className="text-lg">
                 {item.icon}
               </span>
-              <span className="text-[7px] font-black text-slate-400 group-hover:text-blue-700 uppercase tracking-tighter">
+              <span className="text-[10px] font-bold tracking-tight">
                 {item.name}
               </span>
             </Link>
@@ -159,6 +233,7 @@ export default function AsahayFundHome() {
   );
 }
 
+// Sub-component: Stat Card
 function StatCard({ icon, title, value, color, isCount = false }) {
   const colors = {
     blue: 'bg-blue-50 text-blue-600',
@@ -168,14 +243,16 @@ function StatCard({ icon, title, value, color, isCount = false }) {
   };
 
   return (
-    <div className="bg-white p-5 md:p-6 rounded-[2rem] shadow-sm border border-slate-50 text-center hover:shadow-xl transition-all duration-500 group">
-      <div className={`w-10 h-10 md:w-12 md:h-12 mx-auto mb-3 rounded-2xl flex items-center justify-center text-lg md:text-xl transition-transform group-hover:rotate-12 ${colors[color]}`}>
+    <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-all group">
+      <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base shrink-0 mb-3 transition-transform group-hover:scale-110 ${colors[color]}`}>
         {icon}
       </div>
-      <p className="text-lg md:text-2xl font-black text-slate-800 italic">
-        {(value ?? 0).toLocaleString('bn-BD')} {!isCount && <span className="text-[10px] md:text-xs">৳</span>}
-      </p>
-      <p className="text-slate-400 text-[8px] md:text-[9px] uppercase font-black tracking-[0.15em] mt-1">{title}</p>
+      <div>
+        <p className="text-slate-400 text-[11px] font-bold uppercase tracking-wider mb-0.5">{title}</p>
+        <p className="text-xl font-extrabold text-slate-900 tracking-tight">
+          {(value ?? 0).toLocaleString('bn-BD')} {!isCount && <span className="text-xs font-medium text-slate-500">৳</span>}
+        </p>
+      </div>
     </div>
   );
 }
