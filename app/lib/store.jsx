@@ -3,7 +3,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
-const RENDER_LIVE_API = 'https://probashi-funds-api.onrender.com';
+const RENDER_LIVE_API = 'https://probishi-fund-api.onrender.com';
 const getBaseUrl = () => RENDER_LIVE_API;
 
 const ALL_FUNDS = ['iftaar-tohobil', 'asahay-sahajjo', 'mosjid-unnoyon', 'eidgah-songskar', 'education', 'general'];
